@@ -56,7 +56,7 @@ function ResponsiveSizes({ children, className }: { children: any, className?: s
         </AppShell.Section>
         
         <AppShell.Section grow>
-          <Sidebar />
+          <Sidebar onLinkClick={toggle} />
         </AppShell.Section>
         
         <AppShell.Section>
