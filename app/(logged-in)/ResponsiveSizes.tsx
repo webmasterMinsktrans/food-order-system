@@ -10,6 +10,7 @@ import Link from 'next/link';
 
 function ResponsiveSizes({ children, className }: { children: any, className?: string }) {
   const [opened, { toggle }] = useDisclosure();
+  
   return (
     <AppShell
       header={{ height: { base: 50, sm: 70, md: 70, lg: 70 } }}
@@ -22,30 +23,45 @@ function ResponsiveSizes({ children, className }: { children: any, className?: s
       className={classes.bodyColor}
     >
       <AppShell.Header className={classes.header}>
-        <Link href="/" style={{ textDecoration: 'none', color:'inherit' }}>
-          <Group align="center" justify="space-between" h="100%">
-            <Group px="md" visibleFrom="sm" pl="lg" align='center'>
-                {/* <Image src={logo} alt="" width={37} height={52} /> */}
-                <Image src={logo2} alt="" width={40} height={40} />
-                <Title order={3} pt={7}>Заказ питания</Title>
-            </Group>
-            <UserAvatar px="md" visibleFrom="sm" pl="lg" />
-            <Group h="100%" px="md" hiddenFrom="sm">
-              <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-            </Group>
+        <Group align="center" justify="space-between" h="100%" px="md">
+          
+          {/* Мобильная кнопка меню (слева на экранах < sm) */}
+          <Group hiddenFrom="sm" h="100%">
+            <Burger opened={opened} onClick={toggle} size="sm" />
           </Group>
-        </Link>
+
+          {/* Кликабельный логотип и название */}
+          <Link href="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+            {/* Версия для десктопа */}
+            <Group visibleFrom="sm" pl="md" align="center">
+              <Image src={logo2} alt="Логотип" width={40} height={40} />
+              <Title order={3} pt={7}>Заказ питания</Title>
+            </Group>
+            
+            {/* Версия для мобильных (только иконка, чтобы не ломать шапку) */}
+            <Group hiddenFrom="sm" align="center">
+              <Image src={logo2} alt="Логотип" width={32} height={32} />
+            </Group>
+          </Link>
+
+          {/* Профиль пользователя (справа, скрыт на мобильных по вашей логике) */}
+          <UserAvatar visibleFrom="sm" pl="lg" />
+          
+        </Group>
       </AppShell.Header>
+
       <AppShell.Navbar className={classes.navbar}>
         <AppShell.Section>
           {/* <Divider my="md" pb="md" /> */}
         </AppShell.Section>
+        
         <AppShell.Section grow>
           <Sidebar />
         </AppShell.Section>
+        
         <AppShell.Section>
           <Divider my="md" />
-          <Text className={classes.bottomText}>
+          <Text className={classes.bottomText} size="xs" ta="center" px="sm" c="dimmed">
             © Государственное предприятие &quot;Минсктранс&quot;, 2024
           </Text>
         </AppShell.Section>
@@ -57,4 +73,5 @@ function ResponsiveSizes({ children, className }: { children: any, className?: s
     </AppShell>
   );
 }
+
 export default ResponsiveSizes;
