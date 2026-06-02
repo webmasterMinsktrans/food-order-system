@@ -40,7 +40,7 @@ function ResponsiveSizes({ children, className }: { children: any, className?: s
             
             {/* Версия для мобильных (только иконка, чтобы не ломать шапку) */}
             <Group hiddenFrom="sm" align="center">
-              <Image src={logo2} alt="Логотип" width={32} height={32} />
+              
             </Group>
           </Link>
 
