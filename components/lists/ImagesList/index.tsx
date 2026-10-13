@@ -19,28 +19,26 @@ interface ImageListProps {}
 const ImageList = (props: ImageListProps) => {
   const [page, s, sortOrder, orderBy, office] = useSearchParamValues(['page', 's', 'order', 'sort', 'office']);
 
+  // ✅ ИСПРАВЛЕНИЕ: Жестко задаем дефолтные значения для бэкенда Express.
+  // Если модератор еще не выбрал сортировку (в URL пусто), мы принудительно 
+  // отправляем 'id' и 'desc' (или ваши дефолтные поля, например 'created').
+  // Это защитит Express от зависания, и бэкенд сразу вернет весь список картинок!
   const queryParams = useMemo(() => ({
-    page: +(page ?? 1), 
+    page: page ? +page : 1, 
     pageSize: 20,
-    s,
-    orderBy,
-    sortOrder,
-    // ✅ Исправление: передаем canteenId только если он реально выбран модератором
+    s: s || undefined,
+    orderBy: orderBy || 'id',         // 👈 СТАЛО: дефолтное поле сортировки бэкенда
+    sortOrder: sortOrder || 'desc',   // 👈 СТАЛО: дефолтное направление сортировки
     canteenId: office && office !== 'undefined' ? +office : undefined,
   }), [page, s, orderBy, sortOrder, office]);
 
   const { data, isLoading, isFetching, error } = useGetImageListQuery(queryParams);
-  
-  // 👇 ДОБАВЬТЕ ЭТОТ ТОЧНЫЙ ЛОГ СЮДА:
+
   console.log('=== МИНСКTРАНС ДЕБАГ ГАЛЕРЕИ ===', {
     queryParams,
     hasData: !!data,
-    dataType: typeof data,
-    isArray: data ? Array.isArray(data) : 'no data',
-    rawResponse: data, // Позволит раскрыть объект стрелочкой в консоли
     isFetching,
-    isLoading,
-    error: error ? (error as any) : 'no error'
+    isLoading
   });
   
   const images = data?.data ?? [];
@@ -131,12 +129,14 @@ const ImageList = (props: ImageListProps) => {
     );
   }
 
-  const hasLoadedData = data && images.length > 0;
+  // Лоадер перекрывает страницу только тогда, когда идет первая загрузка и данных в памяти стора еще нет
+  const showLoader = isFetching && !data;
   const hasNoData = !isFetching && data && images.length === 0;
 
   return (
     <div style={{ position: 'relative', minHeight: '400px', width: '100%' }}>
-      <LoadingOverlay visible={isFetching || !data} overlayProps={{ blur: 1 }} />
+      {/* Мягкий оверлейный лоадер */}
+      <LoadingOverlay visible={showLoader} overlayProps={{ blur: 1 }} />
       
       {
         hasNoData ? (
@@ -154,9 +154,9 @@ const ImageList = (props: ImageListProps) => {
           >
             <Flex className={classes.imageList}>
               <LoadingOverlay visible={deleteImagesResult.isLoading || deleteImagesTagsResult.isLoading} />
-              {isLoading && !hasLoadedData && <Skeleton mih={1000} miw={1400}/>}
+              {isLoading && !showLoader && images.length === 0 && <Skeleton mih={1000} miw={1400}/>}
               {
-                images.map((img)=>(
+                (!showLoader || images.length > 0) && images.map((img)=>(
                   <ImageCard 
                     key={img.id} 
                     image={img} 
@@ -166,7 +166,7 @@ const ImageList = (props: ImageListProps) => {
                 )) 
               }
             </Flex>
-            { hasLoadedData && (
+            {images.length > 0 && (
               <Flex className={classes.paginationBox}>
                 <Pagination total={totalPagesCount} />
               </Flex>
