@@ -23,7 +23,6 @@ const OrdersSearchList = () => {
 
   // 2. Стабилизируем и строго типизируем объект параметров для RTK Query
   const queryParams = useMemo(() => {
-    // Безопасно преобразуем нативные Date в строки ISO-формата, чтобы удовлетворить тип string в контракте API
     const startIso = periodParam && periodParam[0] ? dayjs(periodParam[0]).toISOString() : undefined;
     const endIso = periodParam && periodParam[1] ? dayjs(periodParam[1]).toISOString() : undefined;
 
@@ -50,31 +49,44 @@ const OrdersSearchList = () => {
     );
   }
 
-  // Контролируем показ пустого состояния, чтобы избежать мерцания интерфейса во время фонового fetch
-  const hasNoData = !isFetching && data && data.data.length === 0;
-
-  if (isFetching || hasNoData) {
+  // ✅ ИСПРАВЛЕНИЕ №1: Если идет загрузка (включая самую первую долю секунды инициализации),
+  // строго возвращаем только лоадер, не допуская ложного рендеринга таблицы или заглушки.
+  if (isFetching || !data) {
     return (
       <div className={commonClasses.loadingBox}>
-        {
-          isFetching ?
-          <LoadingOverlay visible />
-          :
-          <>
-            <Image src={searchEmpty} width={250} height={250} alt="Nothing found"/>
-            <Title order={3}>По вашему запросу ничего не найдено</Title>
-          </>
-        }
+        <LoadingOverlay visible />
       </div>
-    )
+    );
   }
 
+  // ✅ ИСПРАВЛЕНИЕ №2: Проверка отсутствия данных срабатывает только когда data гарантированно загружен
+  const hasNoData = data.data.length === 0;
+
+  if (hasNoData) {
+    return (
+      <div className={commonClasses.loadingBox}>
+        <Image 
+          src={searchEmpty} 
+          width={250} 
+          height={250} 
+          alt="Nothing found"
+          priority // Ускоряет отрисовку заглушки в Next.js 15
+        />
+        <Title order={3}>По вашему запросу ничего не найдено</Title>
+      </div>
+    );
+  }
+
+  // Сюда код дойдет только тогда, когда загрузка завершена и в массиве реально есть заказы
   return (
     <>
-      <OrdersTable items={data?.data ?? []}/>
-      {data && <div className={commonClasses.pagination}><Pagination total={data.totalPages}/></div>}
+      <OrdersTable items={data.data}/>
+      <div className={commonClasses.pagination}>
+        <Pagination total={data.totalPages}/>
+      </div>
     </>
-  )
+  );
 };
 
 export default OrdersSearchList;
+
