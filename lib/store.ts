@@ -1,5 +1,5 @@
 import { Action, combineReducers, configureStore } from '@reduxjs/toolkit';
-import { cartSlice } from './features/cart/cartSlice'; // ✅ ИСПРАВЛЕНИЕ №1: Импортируем чистый слайс (именованный импорт)
+import { cartSlice } from './features/cart/cartSlice'; // Именованный импорт чистого слайса
 import menuSlice from './features/menu/menuSlice';
 import { authApi } from './api/authApi';
 import { userApi } from './api/userApi';
@@ -11,14 +11,19 @@ import { persistReducer, persistStore } from 'redux-persist';
 import { sessionStorage } from './storage';
 
 const appReducer = combineReducers({
-  cart: cartSlice.reducer, // ✅ ИСПРАВЛЕНИЕ №2: Передаем чистый оригинальный редюсер без двойного persist
+  cart: cartSlice.reducer, // Чистый оригинальный редюсер без двойного persist
   menu: menuSlice,
   user: userSlice,
+  
+  // ✅ УНИКАЛЬНЫЙ КЛЮЧ 1: Авторизация/Вход (свой собственный обособленный редюсер)
   [authApi.reducerPath]: authApi.reducer,
-  [userApi.reducerPath]: userApi.reducer,   
-  [menuApi.reducerPath]: menuApi.reducer,   
-  [orderApi.reducerPath]: orderApi.reducer,
+  
+  // ✅ УНИКАЛЬНЫЙ КЛЮЧ 2: Базовые публичные эндпоинты без токенов (например, регистрация)
   [baseApiWithoutAuth.reducerPath]: baseApiWithoutAuth.reducer,
+  
+  // ✅ УНИКАЛЬНЫЙ КЛЮЧ 3: Главный редюсер авторизованной базы.
+  // Сюда автоматически инкапсулируются данные из userApi, menuApi и orderApi.
+  // Мы удалили их дубликаты выше, чтобы избавиться от ошибки "multiple properties with the same name"
   [baseApiWithAuth.reducerPath]: baseApiWithAuth.reducer,
 });
 
@@ -35,6 +40,7 @@ const rootPersistConfig = {
 
 const rootPersistedReducer = persistReducer(rootPersistConfig, rootReducer);
 
+// Конфигурация middlewares остается полной — это нужно для корректной работы кэширования RTK Query
 const getCustomMiddleware = (getDefaultMiddleware: any) =>
   getDefaultMiddleware({
     serializableCheck: false, 
