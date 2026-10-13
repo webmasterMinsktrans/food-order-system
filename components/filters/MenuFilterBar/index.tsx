@@ -1,104 +1,104 @@
 'use client';
 
-import { useEffect, useRef, useState, useMemo, useTransition } from 'react'; // ✅ ИСПРАВЛЕНИЕ №1: Импортируем useTransition
-import { ComboboxItem } from '@mantine/core';
-import { useGetMenuCategoriesQuery } from '@/lib/api/menuApi';
-import { useArraySearchParamValue, useUpdatePageURL } from '@/shared/hooks';
-import { NotificationService } from '@/shared/services';
-import { FetchBaseQueryError } from '@reduxjs/toolkit/query';
+import { ActionIcon, Affix, CloseButton, ComboboxItem, Flex, Stack, Title, useMantineTheme } from '@mantine/core';
+import { createContext, FunctionComponent } from 'react';
+import { useDisclosure } from '@mantine/hooks';
+import { IconFilter, IconFilterFilled } from '@tabler/icons-react';
+import classes from './styles.module.scss';
+import { useFilters } from './useFilters';
+import { MultiSelect } from '@/UI';
+import DeliveryDestinationInput from '@/components/DeliveryDestinationInput';
+import FilterModal from './FilterModal/FilterModal';
 
-export function useFilters() {
-  const { data, error } = useGetMenuCategoriesQuery(undefined);
+export const FilterContext = createContext({
+  categoryOptions: [] as ComboboxItem[],
+  categoryValue: [] as string[] | undefined,
+  changeCategory: (() => {}) as any,
+  typeOptions: [] as ComboboxItem[],
+  typeValue: [] as string[] | undefined,
+  changeType: (() => {}) as any,
+  resetFilters: () => {},
+  isFiltersActive: false,
+});
+
+export const MenuFilterBar: FunctionComponent = () => {
+  // ✅ ИСПРАВЛЕНИЕ №1: Вызываем хук useFilters() строго ОДИН раз.
+  const filters = useFilters();
   
-  const type = useArraySearchParamValue<string>('type');
-  const categoryParam = useArraySearchParamValue<string>('category');
-  
-  const [categoryValue, setCategoryState] = useState<string[]>([]);
-  const [typeValue, setTypeState] = useState<string[]>([]);
-  
-  const { updateURL } = useUpdatePageURL();
-
-  // ✅ ИСПРАВЛЕНИЕ №2: Инициализируем хук переходаuseTransition для React 19.
-  // Он прикажет браузеру сначала дать отработать анимации выпадающих списков Mantine MultiSelect,
-  // а изменение URL в адресной строке выполнить в фоне с низким приоритетом, предотвращая краш гидратации.
-  const [, startTransition] = useTransition();
-
-  const categoryOptions = useMemo(() => {
-    if (!data) return [];
-    return data.map(({ id, name }) => ({
-      value: id.toString(),
-      label: name,
-    }));
-  }, [data]);
-
-  useEffect(() => {
-    if (categoryParam) {
-      setCategoryState(categoryParam);
-    }
-  }, [categoryParam]);
-
-  useEffect(() => {
-    if (type) {
-      setTypeState(type);
-    }
-  }, [type]);
-
-  useEffect(() => {
-    if (error) {
-      NotificationService.showErrorNotification({
-        title: 'Ошибка получения категорий',
-        message: `${(error as FetchBaseQueryError)?.status} ${(error as any)?.message || ''}`,
-      });
-    }
-  }, [error]);
-
-  const isFiltersActive = categoryValue.length > 0 || typeValue.length > 0;
-
-  // ✅ ИСПРАВЛЕНИЕ №3: Оборачиваем вызовы утилиты updateURL роутера Next.js 15 в startTransition.
-  // Это полностью устраняет падение "Application error: a client-side exception has occurred" 
-  // при выборе фильтров типов блюд и категорий продукции.
-
-  const changeCategory = (arg?: string[]) => {
-    const newValue = arg ?? [];
-    setCategoryState(newValue);
-    
-    startTransition(() => {
-      updateURL(['category', 'type', 'page'], [newValue.toString(), typeValue.toString(), '']);
-    });
-  };
-
-  const changeType = (arg?: string[]) => {
-    const newValue = arg ?? [];
-    setTypeState(newValue);
-    
-    startTransition(() => {
-      updateURL(['category', 'type', 'page'], [categoryValue.toString(), newValue.toString(), '']);
-    });
-  };
-
-  const resetFilters = () => {
-    setCategoryState([]);
-    setTypeState([]);
-    
-    startTransition(() => {
-      updateURL(['category', 'type', 'page'], ['', '', '']);
-    });
-  };
-
-  return {
-    data,
-    categoryOptions,
-    categoryValue,
+  // ✅ ИСПРАВЛЕНИЕ №2: Деструктурируем переменные из уже созданной константы filters.
+  // Это предотвращает дублирование параллельных процессов маршрутизации в React 19.
+  const {
+    categoryOptions, 
+    categoryValue, 
     changeCategory,
-    typeOptions,
-    typeValue,
+    typeOptions, 
+    typeValue, 
     changeType,
-    resetFilters,
+    resetFilters, 
     isFiltersActive,
-  };
-}
+  } = filters;
 
-const typeOptions: Array<ComboboxItem> = [
-  { value: 'ownProduct', label: 'Блюда собственного производства' },
-  { value: 'alien', label: 'Готовая продукция' },
-];
+  const [opened, { open, close }] = useDisclosure(false);
+  const theme = useMantineTheme();
+
+  return (
+    <FilterContext.Provider value={filters}>
+      <Flex className={classes.filtersBox}>
+        <DeliveryDestinationInput />
+        <Flex className={classes.filterBarContainer}>
+          <Stack className={classes.filter}>
+            <Title order={4}>Тип продукции</Title>
+            <MultiSelect
+              className={classes.select}
+              data={typeOptions}
+              value={typeValue}
+              onChange={changeType}
+              placeholder='Вид продукции'
+            />
+          </Stack>
+          <Stack className={classes.filter}>
+            <Title order={4}>Тип блюда</Title>
+            <MultiSelect
+              className={classes.select}
+              data={categoryOptions}
+              value={categoryValue}
+              onChange={changeCategory}
+              disabled={categoryOptions.length === 0}
+              placeholder='Тип блюда'
+            />
+          </Stack>
+          <Stack className={classes.filter}>
+            <Title order={4} className={classes.resetButtonHeader}>Сбросить</Title>
+            <CloseButton
+              disabled={!isFiltersActive} // Исправлена логика кнопки сброса (активна, когда фильтры применены)
+              onClick={resetFilters}
+              className={classes.resetButton}
+            />
+          </Stack>
+        </Flex>
+        <FilterModal
+          opened={opened}
+          onClose={close}
+          title="Фильтры"
+        />
+        <Affix
+          position={{ top: 10, right: theme.spacing.md }}
+          hiddenFrom="sm"
+          hidden={opened}
+        >
+          <ActionIcon
+            onClick={open}
+            hiddenFrom="sm"
+            radius="xl"
+            variant="transparent"
+            size={25}
+          >
+            {isFiltersActive ? <IconFilterFilled /> : <IconFilter />}
+          </ActionIcon>
+        </Affix>
+      </Flex>
+    </FilterContext.Provider>
+  );
+};
+
+export default MenuFilterBar;
