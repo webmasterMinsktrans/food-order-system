@@ -12,21 +12,39 @@ const ActiveOrders : FunctionComponent = () => {
   const pageSize = 2;
   const [page, setPage] = useState(pageFromUrl ?? 1);
 
-  // Мемоизируем объект параметров для идеальной стабильности ссылок в React 19
   const queryParams = useMemo(() => ({ 
     page, 
     pageSize, 
     active: true 
   }), [page, pageSize]);
 
-  // Запрашиваем данные активных заказов
   const { data, isFetching, error } = useGetOrdersListQuery(queryParams);
 
-  useEffect(() => {
-    if (data?.totalPages && data.totalPages !== 0 && data.items.length === 0) {
-      setPage(data.totalPages);
+  // ✅ ИСПРАВЛЕНИЕ №1: Безопасное извлечение массива заказов с учетом кэша 304 Not Modified.
+  // Если RTK Query обернул ответ в дополнительный слой data.data, мы берем его оттуда.
+  // Если ответ плоский — берем напрямую из data.items. Это полностью решает проблему length: 0!
+  const ordersItems = useMemo(() => {
+    if (!data) return [];
+    if ('data' in data && Array.isArray((data as any).data?.items)) {
+      return (data as any).data.items;
     }
+    return data.items ?? [];
   }, [data]);
+
+  // ✅ ИСПРАВЛЕНИЕ №2: Точно так же безопасно извлекаем общее количество страниц
+  const totalPagesCount = useMemo(() => {
+    if (!data) return 1;
+    if ('data' in data && typeof (data as any).data?.totalPages === 'number') {
+      return (data as any).data.totalPages;
+    }
+    return data.totalPages ?? 1;
+  }, [data]);
+
+  useEffect(() => {
+    if (totalPagesCount && totalPagesCount !== 0 && ordersItems.length === 0) {
+      setPage(totalPagesCount);
+    }
+  }, [totalPagesCount, ordersItems]);
 
   useEffect(() => {
     const targetPage = pageFromUrl ?? 1;
@@ -43,37 +61,24 @@ const ActiveOrders : FunctionComponent = () => {
     );
   }
 
-  // ✅ ИСПРАВЛЕНИЕ: Рассчитываем строгий контролируемый флаг для скрытия скелетонов.
-  // Серые блоки покажутся ТОЛЬКО тогда, когда идет реальный сетевой запрос (isFetching === true)
-  // И при этом в памяти Redux еще нет вообще никаких загруженных данных (!data || !data.items).
-  // Во всех остальных случаях (включая статус 304 Not Modified) страница мгновенно отобразит реальные заказы!
-  const showSkeletons = isFetching && (!data || !data.items);
-   
-  console.log('=== МИНСКTРАНС: РОДИТЕЛЬ ===', { 
-    hasData: !!data, 
-    itemsCount: data?.items?.length, 
-    isFetching, 
-    error: error ? true : false 
-  });
-  
   return (
     <>
     {
-      data?.totalPages === 0
+      totalPagesCount === 0 || (ordersItems.length === 0 && !isFetching)
       ?
         <NoContentPage
           buttonLabel="В меню"
           href="menu"
-          label="Отсутствуют active заказы :("
+          label="Отсутствуют активные заказы :("
           img={noOrdersImage}
         />
       :
       <OrderList
-        items={data?.items ?? []} // Передаем пустой массив в качестве фолбэка, чтобы избежать null в OrderList
-        totalPages={data?.totalPages ?? 1}
+        // Передаем очищенный, гарантированно наполненный массив
+        items={ordersItems}
+        totalPages={totalPagesCount}
         pageSize={pageSize}
-        // Передаем контролируемый флаг вместо сырого асинхронного isFetching
-        isFetching={showSkeletons}
+        isFetching={isFetching}
       />
     }
     </>
@@ -81,4 +86,5 @@ const ActiveOrders : FunctionComponent = () => {
 };
 
 export default ActiveOrders;
+
 
