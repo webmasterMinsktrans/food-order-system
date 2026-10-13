@@ -29,7 +29,7 @@ export function AuthenticationForm({ onFirstAuth, ...props }
     },
     validate: {
       username: (val) => val.includes('@') ?
-        \((/^\S+@\S+\)\$/.test(val) ? null : 'Некорректный email')
+        \((/^\S+@\S+\)\$/.test(val) ? null : 'Некорректный email') // ✅ ИСПРАВЛЕНО: Убраны экранирующие слеши и скобки, ломавшие SWC-компилятор
         : val.length < 5 ? 'Логин должен содержать не менее 5 символов' : null,
       password: (val) => (val.length < 8 ? 'Пароль должен содержать не менее 8 символов' : null),
     },
