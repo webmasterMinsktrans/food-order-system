@@ -36,7 +36,17 @@ const OrdersHistory : FunctionComponent = () => {
   const showLoader = isFetching && !data;
 
   return (
-    <div style={{ position: 'relative', minHeight: '200px', width: '100%' }}>
+    <div style={{ 
+  position: 'relative', 
+  minHeight: '200px', 
+  width: '100%', 
+  display: 'flex', 
+  flexDirection: 'column', 
+  justifyContent: 'flex-start', 
+  alignItems: 'center', 
+  gap: '10px'
+}}>
+
       {
         !showLoader && (!data || data.totalPages === 0 || !data.items || data.items.length === 0)
         ?
