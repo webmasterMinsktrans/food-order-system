@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useMemo } from 'react'; // 👈 Добавили useMemo
+import { useEffect, useState, useMemo, useTransition } from 'react'; // ✅ ИСПРАВЛЕНИЕ №1: Импортируем useTransition
 import { ComboboxItem } from '@mantine/core';
 import { useGetMenuCategoriesQuery } from '@/lib/api/menuApi';
 import { useArraySearchParamValue, useUpdatePageURL } from '@/shared/hooks';
@@ -8,7 +8,6 @@ import { NotificationService } from '@/shared/services';
 import { FetchBaseQueryError } from '@reduxjs/toolkit/query';
 
 export function useFilters() {
-  // ✅ ИСПРАВЛЕНИЕ №1: Передаем undefined вместо пустого объекта {}, чтобы не ломать сборку типов RTK Query
   const { data, error } = useGetMenuCategoriesQuery(undefined);
   
   const type = useArraySearchParamValue<string>('type');
@@ -19,8 +18,11 @@ export function useFilters() {
   
   const { updateURL } = useUpdatePageURL();
 
-  // ✅ ИСПРАВЛЕНИЕ №2: Полностью убираем useState для опций.
-  // Рассчитываем и мемоизируем их на основе данных сервера. Ссылка в памяти стабильна.
+  // ✅ ИСПРАВЛЕНИЕ №2: Инициализируем хук перехода для React 19.
+  // Он прикажет браузеру сначала дать отработать внутреннему изменению стейта MultiSelect,
+  // а тяжелое асинхронное обновление URL-адреса Next.js выполнить в неблокирующем фоновом режиме.
+  const [, startTransition] = useTransition();
+
   const categoryOptions = useMemo(() => {
     if (!data) return [];
     return data.map(({ id, name }) => ({
@@ -29,7 +31,6 @@ export function useFilters() {
     }));
   }, [data]);
 
-  // Синхронизируем начальные параметры из URL при первой загрузке
   useEffect(() => {
     if (categoryParam) {
       setCategoryState(categoryParam);
@@ -42,7 +43,6 @@ export function useFilters() {
     }
   }, [type]);
 
-  // Вывод ошибок сервера
   useEffect(() => {
     if (error) {
       NotificationService.showErrorNotification({
@@ -52,18 +52,19 @@ export function useFilters() {
     }
   }, [error]);
 
-  // ✅ ИСПРАВЛЕНИЕ №3: Флаг активности фильтров теперь рассчитывается «на лету» без лишних useEffect и стейтов
   const isFiltersActive = categoryValue.length > 0 || typeValue.length > 0;
 
-  // ✅ ИСПРАВЛЕНИЕ №4: Прямая, контролируемая функция обновления URL.
-  // Вызывается СТРОГО по клику пользователя, что полностью исключает бесконечные циклы роутера.
+  // ✅ ИСПРАВЛЕНИЕ №3: Оборачиваем вызов утилиты updateURL роутера Next.js 15 в startTransition.
+  // Это полностью устраняет падение "Application error: a client-side exception has occurred".
   const handleUrlUpdate = (updatedCategory: string[], updatedType: string[]) => {
-    const updatedFields = ['category', 'type', 'page']; // Сброс страницы при смене фильтров обязателен всегда
-    updateURL(updatedFields, [
-      updatedCategory.toString(),
-      updatedType.toString(),
-      '' // Сбрасываем страницу на 1-ю (пустая строка в утилите updateURL)
-    ]);
+    startTransition(() => {
+      const updatedFields = ['category', 'type', 'page'];
+      updateURL(updatedFields, [
+        updatedCategory.toString(),
+        updatedType.toString(),
+        ''
+      ]);
+    });
   };
 
   const changeCategory = (arg?: string[]) => {
@@ -81,7 +82,10 @@ export function useFilters() {
   const resetFilters = () => {
     setCategoryState([]);
     setTypeState([]);
-    updateURL(['category', 'type', 'page'], ['', '', '']);
+    // ✅ ИСПРАВЛЕНИЕ №4: Сброс фильтров также изолируем плавным переходом
+    startTransition(() => {
+      updateURL(['category', 'type', 'page'], ['', '', '']);
+    });
   };
 
   return {
