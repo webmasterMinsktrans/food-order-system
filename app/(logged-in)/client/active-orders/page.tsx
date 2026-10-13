@@ -1,6 +1,6 @@
 'use client';
 
-import { FunctionComponent, useEffect, useMemo, useState } from 'react';
+import { FunctionComponent, useMemo } from 'react';
 import { NoContentPage, OrderList } from '@/components';
 import { useSearchParamValue } from '@/shared/hooks';
 import noOrdersImage from '@/public/204Order.png';
@@ -8,83 +8,59 @@ import { useGetOrdersListQuery } from '@/lib/api/orderApi';
 import { ErrorPage } from '@/UI';
 
 const ActiveOrders : FunctionComponent = () => {
+  // Читаем страницу напрямую из URL
   const pageFromUrl = useSearchParamValue<number>('page');
   const pageSize = 2;
-  const [page, setPage] = useState(pageFromUrl ?? 1);
 
+  // Если роутер еще инициализируется (null), дефолтом берем 1. Никаких useState!
+  const currentPage = pageFromUrl ? +pageFromUrl : 1;
+
+  // ✅ Стабилизируем ссылку на параметры через useMemo. 
+  // Теперь при любых микротасках гидратации ссылка в памяти неизменна.
   const queryParams = useMemo(() => ({ 
-    page, 
+    page: currentPage, 
     pageSize, 
     active: true 
-  }), [page, pageSize]);
+  }), [currentPage, pageSize]);
 
-  const { data, isFetching, error } = useGetOrdersListQuery(queryParams);
-
-  // ✅ ИСПРАВЛЕНИЕ №1: Безопасное извлечение массива заказов с учетом кэша 304 Not Modified.
-  // Если RTK Query обернул ответ в дополнительный слой data.data, мы берем его оттуда.
-  // Если ответ плоский — берем напрямую из data.items. Это полностью решает проблему length: 0!
-  const ordersItems = useMemo(() => {
-    if (!data) return [];
-    if ('data' in data && Array.isArray((data as any).data?.items)) {
-      return (data as any).data.items;
-    }
-    return data.items ?? [];
-  }, [data]);
-
-  // ✅ ИСПРАВЛЕНИЕ №2: Точно так же безопасно извлекаем общее количество страниц
-  const totalPagesCount = useMemo(() => {
-    if (!data) return 1;
-    if ('data' in data && typeof (data as any).data?.totalPages === 'number') {
-      return (data as any).data.totalPages;
-    }
-    return data.totalPages ?? 1;
-  }, [data]);
-
-  useEffect(() => {
-    if (totalPagesCount && totalPagesCount !== 0 && ordersItems.length === 0) {
-      setPage(totalPagesCount);
-    }
-  }, [totalPagesCount, ordersItems]);
-
-  useEffect(() => {
-    const targetPage = pageFromUrl ?? 1;
-    if (targetPage !== page) {
-      setPage(targetPage);
-    }
-  }, [pageFromUrl, page]);
+  // Запрашиваем данные активных заказов
+  const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
+    skip: typeof window === 'undefined',
+    refetchOnMountOrArgChange: true, // Гарантирует правильный разбор ответа 304 Not Modified
+  });
 
   if (error) {
     return (
       <ErrorPage
-        message={(error as any)?.message}
+        message={(error as any)?.data?.message ?? (error as any)?.message ?? 'Ошибка загрузки заказов'}
       />
     );
   }
-  console.log(ordersItems);
+
+  // Скелетоны лоадера показываются ТОЛЬКО во время первичного fetch-запроса, когда данных в Redux еще нет
+  const showLoader = isFetching && !data;
+
   return (
     <>
-    {
-      totalPagesCount === 0 || (ordersItems.length === 0 && !isFetching)
-      ?
-        <NoContentPage
-          buttonLabel="В меню"
-          href="menu"
-          label="Отсутствуют активные заказы :("
-          img={noOrdersImage}
-        />
-      :
-      <OrderList
-        // Передаем очищенный, гарантированно наполненный массив
-        items={ordersItems}
-        totalPages={totalPagesCount}
-        pageSize={pageSize}
-        isFetching={isFetching}
-      />
-    }
+      {
+        !showLoader && (!data || data.totalPages === 0 || !data.items || data.items.length === 0)
+        ?
+          <NoContentPage
+            buttonLabel="В меню"
+            href="menu"
+            label="Отсутствуют активные заказы :("
+            img={noOrdersImage}
+          />
+        :
+          <OrderList
+            items={data?.items ?? []}
+            totalPages={data?.totalPages ?? 1}
+            pageSize={pageSize}
+            isFetching={showLoader}
+          />
+      }
     </>
   );
 };
 
 export default ActiveOrders;
-
-

@@ -1,6 +1,6 @@
 'use client';
 
-import { FunctionComponent, useEffect, useMemo, useState } from 'react';
+import { FunctionComponent, useMemo } from 'react';
 import { NoContentPage, OrderList, OrdersTotal } from '@/components';
 import noOrdersImage from '@/public/204Order.png';
 import { useSearchParamValue } from '@/shared/hooks';
@@ -10,79 +10,56 @@ import { ErrorPage } from '@/UI';
 const OrdersHistory : FunctionComponent = () => {
   const pageFromUrl = useSearchParamValue<number>('page');
   const pageSize = 2;
-  const [page, setPage] = useState(pageFromUrl ?? 1);
+
+  const currentPage = pageFromUrl ? +pageFromUrl : 1;
 
   const queryParams = useMemo(() => ({ 
-    page, 
+    page: currentPage, 
     pageSize, 
     active: false 
-  }), [page, pageSize]);
+  }), [currentPage, pageSize]);
 
-  const { data, isFetching, error } = useGetOrdersListQuery(queryParams);
-
-  // ✅ Безопасное извлечение массива для истории заказов при ответах 304
-  const ordersItems = useMemo(() => {
-    if (!data) return [];
-    if ('data' in data && Array.isArray((data as any).data?.items)) {
-      return (data as any).data.items;
-    }
-    return data.items ?? [];
-  }, [data]);
-
-  const totalPagesCount = useMemo(() => {
-    if (!data) return 1;
-    if ('data' in data && typeof (data as any).data?.totalPages === 'number') {
-      return (data as any).data.totalPages;
-    }
-    return data.totalPages ?? 1;
-  }, [data]);
-
-  useEffect(() => {
-    if (totalPagesCount && totalPagesCount !== 0 && ordersItems.length === 0) {
-      setPage(totalPagesCount);
-    }
-  }, [totalPagesCount, ordersItems]);
-
-  useEffect(() => {
-    const targetPage = pageFromUrl ?? 1;
-    if (targetPage !== page) {
-      setPage(targetPage);
-    }
-  }, [pageFromUrl, page]);
+  const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
+    skip: typeof window === 'undefined',
+    refetchOnMountOrArgChange: true,
+  });
 
   if (error) {
     return (
       <ErrorPage
-        message={(error as any)?.message}
+        message={(error as any)?.data?.message ?? (error as any)?.message ?? 'Ошибка загрузки истории заказов'}
       />
     );
   }
 
+  const showLoader = isFetching && !data;
+
   return (
     <>
-    {
-      totalPagesCount === 0 || (ordersItems.length === 0 && !isFetching)
-      ?
-        <NoContentPage
-          buttonLabel="В меню"
-          href="menu"
-          label="История заказов отсутствует :("
-          img={noOrdersImage}
-        />
-      :
-      <>
-        <OrdersTotal />
-        <OrderList
-          items={ordersItems}
-          totalPages={totalPagesCount}
-          pageSize={pageSize}
-          isFetching={isFetching}
-        />
-      </>
-    }
+      {
+        !showLoader && (!data || data.totalPages === 0 || !data.items || data.items.length === 0)
+        ?
+          <NoContentPage
+            buttonLabel="В меню"
+            href="menu"
+            label="История заказов отсутствует :("
+            img={noOrdersImage}
+          />
+        :
+          <>
+            <OrdersTotal />
+            <OrderList
+              items={data?.items ?? []}
+              totalPages={data?.totalPages ?? 1}
+              pageSize={pageSize}
+              isFetching={showLoader}
+            />
+          </>
+      }
     </>
   );
 };
 
 export default OrdersHistory;
+
 
