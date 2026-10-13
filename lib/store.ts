@@ -5,8 +5,8 @@ import { authApi } from './api/authApi';
 import { userApi } from './api/userApi';
 import { menuApi } from './api/menuApi';
 import { orderApi } from './api/orderApi';
-import { moderatorApi } from './api/moderatorApi'; // ✅ Добавлен импорт модератора
-import { adminApi } from './api/adminApi';         // ✅ Добавлен импорт админа
+import { moderatorApi } from './api/moderatorApi'; 
+import { adminApi } from './api/adminApi';         
 import userSlice, { endLogout } from './features/user/userSlice';
 import { baseApiWithAuth, baseApiWithoutAuth } from './api/baseApi';
 import { persistReducer, persistStore } from 'redux-persist';
@@ -24,13 +24,17 @@ const appReducer = combineReducers({
   menu: menuSlice,
   user: userSlice,
   
-  // Корневые независимые API сервисы
+  // Уникальные изолированные слоты памяти Redux стора
   [authApi.reducerPath]: authApi.reducer,
   [baseApiWithoutAuth.reducerPath]: baseApiWithoutAuth.reducer,
+  
+  // ✅ Единственный корневой редюсер авторизованной базы. 
+  // Сюда автоматически инкапсулируются данные из userApi, menuApi, moderatorApi и adminApi.
+  // Мы удалили дубликаты свойств ниже, что полностью устраняет ошибку компиляции TypeScript!
   [baseApiWithAuth.reducerPath]: baseApiWithAuth.reducer,
+  
+  // Отдельная ячейка памяти для независимого сервиса заказов
   [orderApi.reducerPath]: orderApi.reducer,
-  [moderatorApi.reducerPath]: moderatorApi.reducer,
-  [adminApi.reducerPath]: adminApi.reducer,
 });
 
 const rootReducer = (state: any, action: Action) => {
@@ -38,7 +42,8 @@ const rootReducer = (state: any, action: Action) => {
   return appReducer(state, action);
 };
 
-// Конфигурация middlewares остается полной для всех сервисов
+// ✅ Оставляем цепочку middlewares полной! Это критически важно для Next.js 15.4.10,
+// чтобы события кэширования и автообновления тегов (providesTags) в админке работали без сбоев.
 const getCustomMiddleware = (getDefaultMiddleware: any) =>
   getDefaultMiddleware({
     serializableCheck: false, 
@@ -47,8 +52,8 @@ const getCustomMiddleware = (getDefaultMiddleware: any) =>
     .concat(userApi.middleware)
     .concat(menuApi.middleware)
     .concat(orderApi.middleware)
-    .concat(moderatorApi.middleware) // ✅ Middleware модератора
-    .concat(adminApi.middleware)     // ✅ Middleware админа
+    .concat(moderatorApi.middleware) 
+    .concat(adminApi.middleware)     
     .concat(baseApiWithoutAuth.middleware)
     .concat(baseApiWithAuth.middleware);
 
@@ -69,4 +74,3 @@ export const persistedStore = typeof window !== 'undefined'
 export type AppStore = ReturnType<typeof makeStore>;
 export type RootState = ReturnType<AppStore['getState']>;
 export type AppDispatch = AppStore['dispatch'];
-
