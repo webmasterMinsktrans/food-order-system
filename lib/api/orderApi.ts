@@ -44,11 +44,6 @@ export const orderApi = createApi({
         };
       },     
       transformResponse: (res) => {
-         console.log('=== ДЕБАГ API: transformResponse ===', {
-          rawResponseReceived: !!res,
-          hasItems: !!(res as any)?.items,
-          itemsLength: (res as any)?.items?.length,
-        });
         if (!res) return undefined; 
         return res as {
           items: OrderMainInfoDto[],

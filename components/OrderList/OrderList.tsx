@@ -16,13 +16,6 @@ interface OrderListProps extends StackProps {
 export const OrderList: FunctionComponent<OrderListProps> = (props) => {
   const { items, totalPages = 1, isFetching = false, pageSize, ...stackProps } = props;
 
-  // Лог дебага для отслеживания состояний в рантайме
-  console.log('=== МИНСКTРАНС: СПИСОК ===', { 
-    itemsReceived: !!items, 
-    length: items?.length, 
-    isFetching 
-  });
-
   // Мемоизируем скелетоны загрузки
   const loadingContent = useMemo(() => {
     return Array.from({ length: pageSize }).map((_, index) => (
