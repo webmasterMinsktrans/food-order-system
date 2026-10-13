@@ -1,6 +1,6 @@
 'use client';
 
-import { FunctionComponent, useEffect, useMemo } from 'react'; // 👈 Добавили useMemo
+import { FunctionComponent, useEffect, useMemo } from 'react';
 import { Flex, Stack } from '@mantine/core';
 import { MenuFilterBar, MenuList } from '@/components';
 import classes from './styles.module.scss';
@@ -15,10 +15,15 @@ import { useSessionStorage } from '@mantine/hooks';
 
 const Menu : FunctionComponent = () => {
   const pageSize = CookieService.getDefaultMenuPageSize();
+  
+  // ✅ ИСПРАВЛЕНИЕ №1: Выставляем getInitialValueInEffect: true.
+  // Это принудительно заставляет хук брать дефолтное значение 1 во время SSR на сервере,
+  // а реальные данные из sessionStorage подгружать только на клиенте в useEffect.
+  // Это полностью страхует компонент пагинации от Hydration Mismatch.
   const [pageCount, setPageCount] = useSessionStorage({
     key: 'menu-total-pages',
     defaultValue: 1,
-    getInitialValueInEffect: false,
+    getInitialValueInEffect: true, 
   });
   
   const page = useSearchParamValue<number>('page');
@@ -26,7 +31,7 @@ const Menu : FunctionComponent = () => {
   const categoryId = useSearchParamValue<string>('category');
   const destination = useAppSelector(selectDeliveryDestination);
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Стабилизируем ссылку на объект параметров через useMemo
+  // Стабилизируем ссылку на объект параметров через useMemo
   const queryParams = useMemo(() => ({
     page: page ? +page : undefined,
     pageSize,
@@ -35,15 +40,15 @@ const Menu : FunctionComponent = () => {
     destinationOfficeId: destination?.id ?? 0,
   }), [page, pageSize, categoryId, type, destination?.id]);
 
-  // Передаем мемоизированный queryParams вместо создания объекта "на лету"
+  // ✅ ИСПРАВЛЕНИЕ №2: Добавляем strict-проверку среды выполнения в skip.
+  // Запрос блокируется на сервере, пока Next.js 15 не инициализирует сессию в браузере.
   const { data, error, isFetching, refetch } = useGetActualMenuQuery(
     queryParams,
-    { skip: destination === null || !destination?.id }
+    { skip: destination === null || !destination?.id || typeof window === 'undefined' }
   );
 
   const dispatch = useAppDispatch();
 
-  // ✅ ИСПРАВЛЕНИЕ №2: Извлекаем массив элементов и тотал страниц для атомарного отслеживания в useEffect
   const menuItems = data?.items;
   const totalPages = data?.totalPages;
 
@@ -55,6 +60,9 @@ const Menu : FunctionComponent = () => {
       setPageCount(totalPages);
     }
   }, [menuItems, totalPages, dispatch, setPageCount]);
+
+  // ✅ ИСПРАВЛЕНИЕ №3: Безопасный расчет флага загрузки, предотвращающий Hydration Mismatch
+  const isMenuLoading = isFetching || !data || typeof window === 'undefined';
 
   return (
     <Stack
@@ -72,7 +80,9 @@ const Menu : FunctionComponent = () => {
         />
         :
         <>
-          <MenuList loading={isFetching || typeof window === 'undefined'} />
+          {/* Передаем строго синхронизированный флаг загрузки */}
+          <MenuList loading={isMenuLoading} />
+          
           <Flex w="100%" justify="flex-end" align="flex-end" flex="1 1 auto">
             <Pagination total={pageCount} boundaries={0} gap={4} size="sm" />
           </Flex>
@@ -83,3 +93,4 @@ const Menu : FunctionComponent = () => {
 };
 
 export default Menu;
+

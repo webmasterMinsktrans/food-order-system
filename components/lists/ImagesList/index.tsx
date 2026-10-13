@@ -2,11 +2,11 @@
 
 import { useDeleteImagesMutation, useDeleteImagesTagsMutation, useGetImageListQuery } from "@/lib/api/moderatorApi";
 import ImageCard from "../../cards/ImageCard";
-import { Flex,  LoadingOverlay,  Skeleton,  } from "@mantine/core";
+import { Flex, LoadingOverlay, Skeleton, Title } from "@mantine/core"; // Добавили Title
 import classes from './styles.module.scss';
 import { Pagination } from "@/UI";
 import { useSearchParamValues } from "@/shared/hooks";
-import { useEffect, useState, useMemo } from "react"; // 👈 Добавили useMemo
+import { useEffect, useState, useMemo } from "react";
 import DropdownMenu from "./DropdownMenu";
 import ImageEditCard from "../../cards/ImageEditCard";
 import { ImageFullInfoDto } from "@/shared/types";
@@ -19,7 +19,7 @@ interface ImageListProps {}
 const ImageList = (props: ImageListProps) => {
   const [page, s, sortOrder, orderBy, office] = useSearchParamValues(['page', 's', 'order', 'sort', 'office']);
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Стабилизируем ссылку на объект параметров через useMemo
+  // Стабилизируем ссылку на объект параметров через useMemo
   const queryParams = useMemo(() => ({
     page: +(page ?? 1), 
     pageSize: 20,
@@ -29,8 +29,14 @@ const ImageList = (props: ImageListProps) => {
     canteenId: office ? +office : undefined,
   }), [page, s, orderBy, sortOrder, office]);
 
-  // Передаем мемоизированный queryParams вместо создания объекта "на лету"
-  const { data, isLoading, isFetching } = useGetImageListQuery(queryParams);
+  // ✅ ИСПРАВЛЕНИЕ №1: Проверяем, пуст ли параметр выбранной столовой в URL
+  const isCanteenNotSelected = !office || office === '' || office === 'undefined';
+
+  // Передаем мемоизированный queryParams и блокируем холостой спам запросами к API,
+  // пока модератор не выбрал конкретную столовую в фильтре
+  const { data, isLoading, isFetching, error } = useGetImageListQuery(queryParams, {
+    skip: isCanteenNotSelected
+  });
   
   const images = data?.data;
   const [picked, setPicked] = useState<number[]>([]);
@@ -57,22 +63,24 @@ const ImageList = (props: ImageListProps) => {
   
   const openEdit = () => {
     if(picked.length === 0) NotificationService.showForbiddenNotification({message:'Не выбрано ни одного изображения'})
-    if(images)
-      openEditModal(images.find((image) => image.id === picked[0])!)
+    if(images) {
+      const selectedImg = images.find((image) => image.id === picked[0]);
+      if(selectedImg) openEditModal(selectedImg);
+    }
   }
   
   const deleteItems = () => {
     const ids = picked;
     deleteImages({body:{ids}})
     .then(res => {
-      if(res.error){
+      if ('error' in res || res.error) {
         NotificationService.showErrorNotification({
           title: 'Ошибка удаления выбранных картинок',
-          message:(res.error as any)?.message
+          message: (res.error as any)?.data?.message ?? (res.error as any)?.message ?? ''
         })
-      }else{
+      } else {
          NotificationService.showSuccessNotification({
-          title: `Удалено ${res.data?.count}`,
+          title: `Удалено ${res.data?.count ?? 0}`,
           message:''
         })
         setPicked([]);
@@ -84,12 +92,12 @@ const ImageList = (props: ImageListProps) => {
     const ids = picked;
     deleteImagesTags({body:{ids}})
     .then(res => {
-      if(res.error){
+      if ('error' in res || res.error) {
         NotificationService.showErrorNotification({
           title: 'Ошибка удаления выбранных тегов',
-          message:(res.error as any)?.message
+          message: (res.error as any)?.data?.message ?? (res.error as any)?.message ?? ''
         })
-      }else{
+      } else {
          NotificationService.showSuccessNotification({
           title: `Теги выбранных картинок очищены`,
           message:''
@@ -99,7 +107,7 @@ const ImageList = (props: ImageListProps) => {
     })
   };
 
-  // ✅ ИСПРАВЛЕНИЕ №2: Безопасный расчет смещения выпадающего меню без падения на сервере
+  // Безопасный расчет смещения выпадающего меню без падения на сервере
   const menuOffset = useMemo(() => {
     const screenWidth = typeof window !== 'undefined' ? window.screen.width : 1920;
     return {
@@ -108,19 +116,46 @@ const ImageList = (props: ImageListProps) => {
     };
   }, [coordinates.x, coordinates.y]);
 
-  if (isFetching || data?.data.length === 0) {
+  // ✅ ИСПРАВЛЕНИЕ №2: Если столовая ещё не выбрана в фильтре — показываем аккуратное приглашение к действию
+  if (isCanteenNotSelected) {
+    return (
+      <div className={classes.loadingBox} style={{ paddingTop: '60px' }}>
+        <Title order={4} c="dimmed" ta="center" style={{ fontWeight: 500 }}>
+          Для просмотра галереи блюд выберите столовую в фильтре выше
+        </Title>
+      </div>
+    );
+  }
+
+  // Контролируем обработку ошибок сервера
+  if (error) {
+    return (
+      <div className={classes.loadingBox} style={{ paddingTop: '40px' }}>
+        <Title order={4} c="red" ta="center">
+          {(error as any)?.data?.message ?? 'Ошибка загрузки изображений галереи'}
+        </Title>
+      </div>
+    );
+  }
+
+  // Загрузка спиннера срабатывает только во время активного fetch-запроса
+  if (isFetching || !data) {
     return (
       <div className={classes.loadingBox}>
-        {
-          isFetching ?
-          <LoadingOverlay visible />
-          :
-          <NoContentPage
-            label="Отсутствуют изображения по заданному запросу :("
-            img={searchEmpty}
-            size='sm'
-          />
-        }
+        <LoadingOverlay visible />
+      </div>
+    )
+  }
+
+  // Если столовая выбрана, но картинок в ней нет
+  if (data.data.length === 0) {
+    return (
+      <div className={classes.loadingBox}>
+        <NoContentPage
+          label="Отсутствуют изображения по заданному запросу :("
+          img={searchEmpty}
+          size='sm'
+        />
       </div>
     )
   }
@@ -132,7 +167,7 @@ const ImageList = (props: ImageListProps) => {
         onContextMenu={e => {e.preventDefault(); toggleOpened({opened:!opened, coordinates: {x: e.pageX, y:e.pageY}})}}
       >
         <Flex className={classes.imageList}>
-          <LoadingOverlay visible={deleteImagesResult.isLoading} />
+          <LoadingOverlay visible={deleteImagesResult.isLoading || deleteImagesTagsResult.isLoading} />
           {isLoading && <Skeleton mih={1000} miw={1400}/>}
           {
             images && images.map((img)=>(
@@ -153,7 +188,7 @@ const ImageList = (props: ImageListProps) => {
         <DropdownMenu 
           opened={opened} 
           onChange={(opened) => toggleOpened({opened, coordinates})} 
-          offset={menuOffset} // Передаем мемоизированное смещение
+          offset={menuOffset} 
           width={180}
           actions={{
             selectAll: ()=> setPicked(images?.map(({id})=>id) ?? []),
