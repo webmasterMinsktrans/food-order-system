@@ -19,51 +19,40 @@ import { useLogin } from '@/shared/hooks';
 import { useSignInMutation } from '@/lib/api/authApi';
 
 export function AuthenticationForm({ onFirstAuth, ...props }
-  : { onFirstAuth: () => void } & PaperProps) {
-  
+  :{ onFirstAuth: () => void } & PaperProps) {
   const form = useForm({
-    mode: 'controlled',
     initialValues: {
       username: '',
       password: '',
     },
     validate: {
       username: (val) => val.includes('@') ?
-        ((/^\S+@\S+\)\$/.test(val) ? null : 'Некорректный email')
-        : val.length < 5 ? 'Логин должен содержать не менее 5 символов' : null,
+      (/^\S+@\S+$/.test(val) ? null : 'Некорректный email')
+      : val.length < 5 ? 'Логин должен содержать не менее 5 символов' : null,
       password: (val) => (val.length < 8 ? 'Пароль должен содержать не менее 8 символов' : null),
     },
   });
-
   const router = useRouter();
   const { login } = useLogin();
-  
-  const [signIn, result] = useSignInMutation();
-
+  const [signIn, result] = useSignInMutation({});
   const onSubmit = form.onSubmit(async ({ username, password }) => {
     const queryBody = username.includes('@') ? { email: username, password } : { login: username, password };
-    
     signIn(queryBody).then(async (res) => {
-      if ('error' in res || res.error) {
-        const errorMessage = (res.error as any)?.data?.message ?? (res.error as any)?.message ?? 'Неверный логин или пароль';
+      if (res.error) {
+        // eslint-disable-next-line prefer-destructuring
+        const error: any = res.error;
+        const errorMessage = (res.error as any).message ?? 'Неизвестная ошибка авторизации';
         form.setErrors({ password: errorMessage });
-        return;
-      }
-
-      const data = res.data;
-      if (!data) return;
-
-      if (data.statusCode === 200) {
-        const { access_token, refresh_token, role } = data;
+      } else if (res.data.statusCode === 200) {
+        const {access_token, refresh_token, role} = res.data;
         await login(access_token, role, refresh_token);
-        const path = (role as string).replaceAll('_', '-');
+        const path = (res.data?.role as string).replaceAll('_', '-');
         router.push(`/${path}`);
-      } else if (data.success) {
+      } else if (res.data.success) {
         onFirstAuth();
       }
     });
   });
-
   return (
     <Paper
       radius="md"
@@ -85,20 +74,22 @@ export function AuthenticationForm({ onFirstAuth, ...props }
             required
             label="Логин или email"
             placeholder="hello@minsktrans.by"
+            value={form.values.username}
+            onChange={(event) => form.setFieldValue('username', event.currentTarget.value)}
+            error={form.errors.username}
             radius="md"
             disabled={result.isLoading}
-            key={form.key('username')}
-            {...form.getInputProps('username')}
           />
 
           <PasswordInput
             required
             label="Пароль"
             placeholder="**********"
+            value={form.values.password}
+            onChange={(event) => form.setFieldValue('password', event.currentTarget.value)}
+            error={form.errors.password}
             radius="md"
             disabled={result.isLoading}
-            key={form.key('password')}
-            {...form.getInputProps('password')}
           />
         </Stack>
 
@@ -112,13 +103,11 @@ export function AuthenticationForm({ onFirstAuth, ...props }
             Войти
           </Button>
         </Group>
-        <Group mt="xs">
-          <Link href="/reset-password">
-            <Anchor component="button" type="button" c="dimmed" size="xs">
-              Я не помню пароль
-            </Anchor>
-          </Link>
-        </Group>
+        <Link href="/reset-password">
+          <Anchor component="button" type="button" c="dimmed" size="xs">
+            Я не помню пароль
+          </Anchor>
+        </Link>
       </form>
     </Paper>
   );
