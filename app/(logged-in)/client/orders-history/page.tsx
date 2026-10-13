@@ -1,9 +1,9 @@
 'use client';
 
-import { FunctionComponent, useEffect, useMemo, useTransition } from 'react'; // 👈 Добавили useMemo и useTransition
+import { FunctionComponent, useMemo } from 'react';
 import { NoContentPage, OrderList, OrdersTotal } from '@/components';
 import noOrdersImage from '@/public/204Order.png';
-import { useSearchParamValue, useUpdatePageURL } from '@/shared/hooks'; // 👈 Подключаем утилиту обновления URL
+import { useSearchParamValue } from '@/shared/hooks';
 import { useGetOrdersListQuery } from '@/lib/api/orderApi';
 import { ErrorPage } from '@/UI';
 import { LoadingOverlay } from '@mantine/core';
@@ -11,38 +11,18 @@ import { LoadingOverlay } from '@mantine/core';
 const OrdersHistory : FunctionComponent = () => {
   const pageFromUrl = useSearchParamValue<number>('page');
   const pageSize = 2;
-  const { updateURL } = useUpdatePageURL();
-  const [, startTransition] = useTransition(); // Инициализируем хук перехода для React 19
 
-  // Вычисляем текущую страницу строго на основе URL-строки (дефолт: 1)
   const currentPage = pageFromUrl ? +pageFromUrl : 1;
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Стабилизируем объект параметров для RTK Query с помощью useMemo
   const queryParams = useMemo(() => ({
     page: currentPage,
     pageSize,
     active: false
   }), [currentPage, pageSize]);
 
-  // Передаем стабильную ссылку queryParams вместо создания объекта "на лету"
-  // Запрос блокируется на сервере, пока Next.js 15 не инициализирует роутер на клиенте
   const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
     skip: typeof window === 'undefined'
   });
-
-  // Извлекаем примитивы для безопасного отслеживания в зависимостях эффекта
-  const totalPages = data?.totalPages;
-  const itemsLength = data?.items?.length;
-
-  // ✅ ИСПРАВЛЕНИЕ №2: Безопасный автоматический откат страницы назад обернут в startTransition.
-  // Это полностью устраняет бесконечный цикл каскадных обновлений роутера в React 19.
-  useEffect(() => {
-    if (totalPages && totalPages !== 0 && itemsLength === 0 && currentPage > totalPages) {
-      startTransition(() => {
-        updateURL(['page'], [totalPages.toString()]);
-      });
-    }
-  }, [totalPages, itemsLength, currentPage, updateURL]);
 
   if (error) {
     return (
@@ -52,8 +32,6 @@ const OrdersHistory : FunctionComponent = () => {
     );
   }
 
-  // ✅ ИСПРАВЛЕНИЕ №3: Лоадер работает в мягком оверлейном режиме, 
-  // подстраиваясь под особенности асинхронного обновления контекста роутера в Next.js 15
   const shouldShowLoader = isFetching || !data || typeof window === 'undefined';
 
   return (
@@ -85,4 +63,3 @@ const OrdersHistory : FunctionComponent = () => {
 };
 
 export default OrdersHistory;
-
