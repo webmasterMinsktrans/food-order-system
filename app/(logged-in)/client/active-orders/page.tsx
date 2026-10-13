@@ -39,7 +39,7 @@ const ActiveOrders : FunctionComponent = () => {
       setPage(targetPage);
     }
   }, [pageFromUrl, page]);
-
+   console.log('МИНСКTРАНС ДЕБАГ:', { data, isFetching, error, pageFromUrl, page });
   if (error) {
     return (
       <ErrorPage
