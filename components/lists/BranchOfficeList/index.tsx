@@ -8,7 +8,7 @@ import Image from "next/image";
 import searchEmpty from '@/public/search_state.gif';
 import { useSearchParamValues } from '@/shared/hooks';
 import { useMemo } from 'react';
-import commonClasses from '../styles.scss' // Убедитесь в правильности импорта стилей
+import commonClasses from '../styles.module.scss';
 
 interface BranchOfficeListProps {}
 
