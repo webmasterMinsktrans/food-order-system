@@ -134,7 +134,8 @@ export const adminApi = baseApiWithAuth.injectEndpoints({
         const bodyFormData = new FormData();
         bodyFormData.append('file', file as Blob);
         for(let [key, value] of Object.entries(body)){
-          if(value !== undefined && value !== null && value !== '')
+          // ✅ ИСПРАВЛЕНИЕ №2.1: Строгое приведение к строке String(value), чтобы исключить конфликт типов string и number в TypeScript
+          if(value !== undefined && value !== null && String(value) !== '')
             bodyFormData.append(key, value?.toString());
         }        
         return ({
@@ -167,3 +168,4 @@ export const {
   useDeleteEmployeeMutation,
   useUpdateBranchOfficeEmployeesMutation,
 } = adminApi;
+
