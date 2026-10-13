@@ -22,14 +22,14 @@ export function AuthenticationForm({ onFirstAuth, ...props }
   : { onFirstAuth: () => void } & PaperProps) {
   
   const form = useForm({
-    mode: 'controlled', // ✅ Гарантирует корректную работу реактивности полей в React 19
+    mode: 'controlled',
     initialValues: {
       username: '',
       password: '',
     },
     validate: {
       username: (val) => val.includes('@') ?
-        \((/^\S+@\S+\)\$/.test(val) ? null : 'Некорректный email') // ✅ ИСПРАВЛЕНО: Убраны экранирующие слеши и скобки, ломавшие SWC-компилятор
+        \((/^\S+@\S+\)\$/.test(val) ? null : 'Некорректный email')
         : val.length < 5 ? 'Логин должен содержать не менее 5 символов' : null,
       password: (val) => (val.length < 8 ? 'Пароль должен содержать не менее 8 символов' : null),
     },
@@ -38,14 +38,12 @@ export function AuthenticationForm({ onFirstAuth, ...props }
   const router = useRouter();
   const { login } = useLogin();
   
-  // ✅ ИСПРАВЛЕНИЕ №1: Убран пустой объект {} из аргументов хука мутации
   const [signIn, result] = useSignInMutation();
 
   const onSubmit = form.onSubmit(async ({ username, password }) => {
     const queryBody = username.includes('@') ? { email: username, password } : { login: username, password };
     
     signIn(queryBody).then(async (res) => {
-      // ✅ ИСПРАВЛЕНИЕ №2: Строгий и безопасный разбор ответа мутации по стандартам Next.js 15
       if ('error' in res || res.error) {
         const errorMessage = (res.error as any)?.data?.message ?? (res.error as any)?.message ?? 'Неверный логин или пароль';
         form.setErrors({ password: errorMessage });
@@ -89,8 +87,6 @@ export function AuthenticationForm({ onFirstAuth, ...props }
             placeholder="hello@minsktrans.by"
             radius="md"
             disabled={result.isLoading}
-            // ✅ ИСПРАВЛЕНИЕ №3: Используем стандартный декларативный синтаксис Mantine Form.
-            // Это исключает лишние ререндеры инпута при вводе в React 19.
             key={form.key('username')}
             {...form.getInputProps('username')}
           />
