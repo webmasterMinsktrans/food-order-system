@@ -21,12 +21,9 @@ const ActiveOrders : FunctionComponent = () => {
     active: true 
   }), [currentPage, pageSize]);
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Добавляем fixedCacheKey и refetchOnMountOrArgChange.
-  // Это принудительно заставит RTK Query проигнорировать пустой серверный HTML-пререндер
-  // и забрать наполненный массив заказов из браузерного ответа 304 Not Modified.
+  // ✅ ИСПРАВЛЕНИЕ: Удаляем свойство fixedCacheKey, оставив только валидный refetchOnMountOrArgChange
   const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
     refetchOnMountOrArgChange: true, // Уничтожает пустой серверный кэш при монтировании в DOM
-    fixedCacheKey: 'client-active-orders', // Изолирует ветку кэша в оперативной памяти Redux
   });
 
   if (error) {

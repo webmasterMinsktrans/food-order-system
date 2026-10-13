@@ -19,10 +19,10 @@ const OrdersHistory : FunctionComponent = () => {
     active: false 
   }), [currentPage, pageSize]);
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Добавляем fixedCacheKey и refetchOnMountOrArgChange для истории
+  // ✅ ИСПРАВЛЕНИЕ: Мы удалили 'fixedCacheKey', оставив только валидный 'refetchOnMountOrArgChange'.
+  // С исправленным baseApi.ts этот хук будет мгновенно забирать данные из кэша и гасить лоадер.
   const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
     refetchOnMountOrArgChange: true,
-    fixedCacheKey: 'client-history-orders',
   });
 
   if (error) {
@@ -62,4 +62,5 @@ const OrdersHistory : FunctionComponent = () => {
 };
 
 export default OrdersHistory;
+
 
