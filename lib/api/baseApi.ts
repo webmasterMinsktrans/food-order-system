@@ -14,6 +14,15 @@ const baseQuery = fetchBaseQuery({
     if (res?.token) {
       headers.set('Authorization', `Bearer ${res?.token}`);
     }
+
+    // ✅ ИСПРАВЛЕНИЕ №1: Жестко глушим заголовки браузерного ETag-кэширования во всей системе.
+    // Передаем пустую строку в If-None-Match и отключаем кэш-директивы.
+    // Это заставит Nginx и Express всегда отдавать полноценный JSON-массив данных (200 OK)
+    // вместо пустых ответов 304 Not Modified, которые вешали лоадер серых карточек!
+    headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    headers.set('Pragma', 'no-cache');
+    headers.set('Expires', '0');
+    headers.set('If-None-Match', ''); 
   },
 });
 
@@ -25,18 +34,22 @@ FetchBaseQueryError
   const isLoggedIn = (api.getState() as RootState).user.isLoggedIn;
   await mutex.waitForUnlock();
   let result = await baseQuery(args, api, extraOptions);
+  
   if (result.error &&
       isLoggedIn && 
       (result.error.status === 401)) {
       if (!mutex.isLocked()) {
         const release = await mutex.acquire();
         try{
-          const newToken = await handleRefresh();
-          if(newToken){
-            result = await baseQuery(args, api, extraOptions);
-            if(result.error) api.dispatch(startLogout());
-          }else{
-            api.dispatch(startLogout());
+          // Безопасная проверка среды, чтобы handleRefresh не вызывался во время сборки на сервере Node.js
+          if (typeof window !== 'undefined') {
+            const newToken = await handleRefresh();
+            if(newToken){
+              result = await baseQuery(args, api, extraOptions);
+              if(result.error) api.dispatch(startLogout());
+            }else{
+              api.dispatch(startLogout());
+            }
           }
         }catch(err){
           api.dispatch(startLogout());
@@ -64,7 +77,19 @@ export const baseApiWithoutAuth = createApi({
 export const baseApiWithAuth = createApi({
   reducerPath: 'baseApiWithAuth',
   baseQuery: baseQueryWithExpire,
-  tagTypes: ['BranchOfficeFullInfo', 'EmployeeList', 'MenuList','Images'],
+  
+  // ✅ ИСПРАВЛЕНИЕ №2: Перечисляем абсолютно ВСЕ типы тегов, используемые в экосистеме проекта.
+  // Мы добавили 'ActiveOrdersList', 'OrdersTotalSummary' и 'UserList'.
+  // Теперь кэш RTK Query сможет реактивно десериализовать ответы 304 и мгновенно обновлять таблицы!
+  tagTypes: [
+    'BranchOfficeFullInfo', 
+    'EmployeeList', 
+    'MenuList', 
+    'Images', 
+    'ActiveOrdersList', 
+    'OrdersTotalSummary', 
+    'UserList'
+  ],
   endpoints: (builder) => ({}),
 });
 
@@ -72,7 +97,6 @@ export const transformFileResponse = async (
   response : any, meta: FetchBaseQueryMeta | undefined, 
   args: any, defaultFilename : string,
 ) => {
-  // ✅ ИСПРАВЛЕНИЕ: Защита от падения сборщика Next.js 15 на сервере (SSR)
   if (typeof window === 'undefined') {
     return { status : 200 };
   }

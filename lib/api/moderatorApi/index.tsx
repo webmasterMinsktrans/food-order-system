@@ -13,7 +13,6 @@ export const moderatorApi = baseApiWithAuth.injectEndpoints({
     }),
     uploadWordMenu: builder.mutation<{ menu: any }, CreateMenuFromDocxDto>({
       query: ({ file, ...body }) => {
-        // Безопасная изоляция для SSR сборщика Next.js 15
         if (typeof window === 'undefined' && typeof global.FormData === 'undefined') {
           return { url: '', method: 'POST' };
         }
@@ -31,11 +30,12 @@ export const moderatorApi = baseApiWithAuth.injectEndpoints({
           formData: true,
         });
       },
+      // ✅ ИСПРАВЛЕНИЕ: Автоматически обновляем список меню при загрузке нового файла из Word/Docx
+      invalidatesTags: ['MenuList'],
       transformErrorResponse,
     }),
     searchImageTags: builder.query<ImageTagDto[], SearchImageTagDto>({
       query: (params) => {
-        // ✅ ИСПРАВЛЕНИЕ №1: Защита от бесконечного цикла рендеринга Next.js 15
         if (!params || Object.keys(params).length === 0) {
           return { url: '/image-tag/search' };
         }
@@ -48,7 +48,6 @@ export const moderatorApi = baseApiWithAuth.injectEndpoints({
     }),
     uploadImages: builder.mutation<Array<ImageDto>, UploadImagesDto>({
       query: ({ files, ...body }) => {
-        // Безопасная изоляция для SSR сборщика Next.js 15
         if (typeof window === 'undefined' && typeof global.FormData === 'undefined') {
           return { url: '', method: 'POST' };
         }
@@ -71,7 +70,6 @@ export const moderatorApi = baseApiWithAuth.injectEndpoints({
     }),
     orderExportDocx: builder.query<any, ExportOrdersDocxDto>({
       query: (params) => {
-        // ✅ ИСПРАВЛЕНИЕ №2: Защита от зацикливания ленивого/обычного query-вызова при выгрузке файлов
         if (!params || Object.keys(params).length === 0) {
           return { url: '/order/actual/export-list/docx' };
         }
@@ -81,13 +79,16 @@ export const moderatorApi = baseApiWithAuth.injectEndpoints({
           responseHandler: (res: Response) => res.status === 200 ? res.blob() : res.json(),
         };
       },
-      transformResponse: (response, meta, args) =>
-        transformFileResponse(response, meta as any, args, 'default.docx'),
+      // ✅ ИСПРАВЛЕНИЕ: Добавляем жесткую проверку на пустой response (код статуса 304).
+      // Если тело ответа отсутствует, возвращаем null и защищаем функцию от краша TypeError.
+      transformResponse: (response, meta, args) => {
+        if (!response) return null;
+        return transformFileResponse(response, meta as any, args, 'default.docx');
+      },
       transformErrorResponse,
     }),
     getMenuList: builder.query<MenuListDto, GetMenuListParams>({
       query: (params) => {
-        // ✅ ИСПРАВЛЕНИЕ №3: Защита от бесконечного рендеринга на главной странице списков меню модератора
         if (!params || Object.keys(params).length === 0) {
           return { url: '/menu/list' };
         }
@@ -101,7 +102,6 @@ export const moderatorApi = baseApiWithAuth.injectEndpoints({
     }),
     getMenuById: builder.query<MenuInfoDto, { id: number }>({
       query: ({ id }) => {
-        // Защита от неинициализированных числовых ID (NaN/undefined) во время SSR гидратации
         if (!id || isNaN(id)) {
           return { url: '/menu/0' };
         }
@@ -129,6 +129,9 @@ export const moderatorApi = baseApiWithAuth.injectEndpoints({
         method: 'PATCH',
         body
       }),
+      // ✅ ИСПРАВЛЕНИЕ: Добавлен пропущенный тег инвалидации.
+      // Теперь при изменении блюда модератором список на главной странице обновится мгновенно и автоматически!
+      invalidatesTags: ['MenuList'],
       transformErrorResponse,
     }),
     deleteMenu: builder.mutation<any, { id: number }>({
@@ -158,6 +161,8 @@ export const moderatorApi = baseApiWithAuth.injectEndpoints({
         method: 'PATCH',
         body
       }),
+      // ✅ ИСПРАВЛЕНИЕ: Сбрасываем кэш галереи картинок при обновлении тегов модератором
+      invalidatesTags: ['Images'],
       transformErrorResponse,
     }),
     deleteImages: builder.mutation<any, DeleteImagesParams>({
