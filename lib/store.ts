@@ -4,7 +4,9 @@ import menuSlice from './features/menu/menuSlice';
 import { authApi } from './api/authApi';
 import { userApi } from './api/userApi';
 import { menuApi } from './api/menuApi';
-import { orderApi } from './api/orderApi'; // ✅ Добавлен импорт сервиса заказов
+import { orderApi } from './api/orderApi';
+import { moderatorApi } from './api/moderatorApi'; // ✅ Добавлен импорт модератора
+import { adminApi } from './api/adminApi';         // ✅ Добавлен импорт админа
 import userSlice, { endLogout } from './features/user/userSlice';
 import { baseApiWithAuth, baseApiWithoutAuth } from './api/baseApi';
 import { persistReducer, persistStore } from 'redux-persist';
@@ -26,11 +28,9 @@ const appReducer = combineReducers({
   [authApi.reducerPath]: authApi.reducer,
   [baseApiWithoutAuth.reducerPath]: baseApiWithoutAuth.reducer,
   [baseApiWithAuth.reducerPath]: baseApiWithAuth.reducer,
-
-  // ✅ ИСПРАВЛЕНИЕ №1: Выделяем ячейку памяти в сторе для редюсера заказов orderApi!
-  // Теперь данные из transformResponse успешно запишутся в кэш-память Redux,
-  // ключ getOrdersList появится в сторе, а length: 0 мгновенно изменится на 1!
   [orderApi.reducerPath]: orderApi.reducer,
+  [moderatorApi.reducerPath]: moderatorApi.reducer,
+  [adminApi.reducerPath]: adminApi.reducer,
 });
 
 const rootReducer = (state: any, action: Action) => {
@@ -38,7 +38,7 @@ const rootReducer = (state: any, action: Action) => {
   return appReducer(state, action);
 };
 
-// Конфигурация middlewares остается полной для корректной работы кэширования RTK Query
+// Конфигурация middlewares остается полной для всех сервисов
 const getCustomMiddleware = (getDefaultMiddleware: any) =>
   getDefaultMiddleware({
     serializableCheck: false, 
@@ -46,7 +46,9 @@ const getCustomMiddleware = (getDefaultMiddleware: any) =>
     .concat(authApi.middleware)
     .concat(userApi.middleware)
     .concat(menuApi.middleware)
-    .concat(orderApi.middleware) // Middleware заказов подключен корректно
+    .concat(orderApi.middleware)
+    .concat(moderatorApi.middleware) // ✅ Middleware модератора
+    .concat(adminApi.middleware)     // ✅ Middleware админа
     .concat(baseApiWithoutAuth.middleware)
     .concat(baseApiWithAuth.middleware);
 
@@ -67,3 +69,4 @@ export const persistedStore = typeof window !== 'undefined'
 export type AppStore = ReturnType<typeof makeStore>;
 export type RootState = ReturnType<AppStore['getState']>;
 export type AppDispatch = AppStore['dispatch'];
+

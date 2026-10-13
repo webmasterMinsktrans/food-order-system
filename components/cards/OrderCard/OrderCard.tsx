@@ -42,8 +42,6 @@ const OrderCardContent: FunctionComponent<OrderCardContentProps> = ({
   orderMainInfoDto,
 }) => {
 
-  console.log('=== МИНСКTРАНС: КАРТОЧКА ЗАПУСТИЛАСЬ ===', orderMainInfoDto?.number);
-  
   const { number, fullPrice, status, issued, orderPositions, canCancel, deliveryDestination } = orderMainInfoDto;
   
   // ✅ ИСПРАВЛЕНИЕ №1: Убираем деструктуризацию "на лету" из deliveryDestination.
