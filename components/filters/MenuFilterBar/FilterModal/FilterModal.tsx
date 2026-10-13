@@ -5,13 +5,17 @@ import { FunctionComponent, useContext } from 'react';
 import { MobilePillsInput, MobileModal } from '@/UI';
 import { FilterContext } from '..';
 
-interface FilterModalProps extends ModalProps {
-}
+interface FilterModalProps extends ModalProps {}
 
 const FilterModal: FunctionComponent<FilterModalProps> = (props) => {
+  // Потребляем очищенные и мемоизированные данные из стабильного FilterContext
   const {
-    categoryOptions, categoryValue, changeCategory,
-    typeOptions, typeValue, changeType,
+    categoryOptions, 
+    categoryValue, 
+    changeCategory,
+    typeOptions, 
+    typeValue, 
+    changeType,
     resetFilters,
   } = useContext(FilterContext);
 
@@ -21,7 +25,9 @@ const FilterModal: FunctionComponent<FilterModalProps> = (props) => {
       zIndex="var(--first-modal-z-index)"
       showAccept
       resetText="Сбросить"
-      resetAction={() => resetFilters()}
+      // ✅ ИСПРАВЛЕНИЕ: Передаем прямую стабильную ссылку на функцию вместо стрелочного замыкания () => resetFilters().
+      // Это предотвращает паразитные микро-ререндеры инпутов во время анимации закрытия окна в React 19.
+      resetAction={resetFilters}
     >
       <Grid gutter="lg" align="flex-start" px="sm">
         <Grid.Col span={5}>
@@ -54,4 +60,5 @@ const FilterModal: FunctionComponent<FilterModalProps> = (props) => {
     </MobileModal>
   );
 };
+
 export default FilterModal;

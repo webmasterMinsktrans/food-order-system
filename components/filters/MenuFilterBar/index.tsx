@@ -10,18 +10,28 @@ import { MultiSelect } from '@/UI';
 import DeliveryDestinationInput from '@/components/DeliveryDestinationInput';
 import FilterModal from './FilterModal/FilterModal';
 
-interface MenuFilterBarProps {
+interface MenuFilterBarProps {}
 
-}
 const MenuFilterBar: FunctionComponent<MenuFilterBarProps> = () => {
+  // ✅ ИСПРАВЛЕНИЕ №1: Вызываем хук useFilters() строго ОДИН раз.
   const filters = useFilters();
+  
+  // ✅ ИСПРАВЛЕНИЕ №2: Деструктурируем переменные из уже созданной константы filters.
+  // Это гарантирует идеальную ссылочную целостность для React 19 и предотвращает двойные запросы к API.
   const {
-    categoryOptions, categoryValue, changeCategory,
-    typeOptions, typeValue, changeType,
-    resetFilters, isFiltersActive,
-  } = useFilters();
+    categoryOptions, 
+    categoryValue, 
+    changeCategory,
+    typeOptions, 
+    typeValue, 
+    changeType,
+    resetFilters, 
+    isFiltersActive,
+  } = filters;
+
   const [opened, { open, close }] = useDisclosure(false);
   const theme = useMantineTheme();
+
   return (
     <FilterContext.Provider value={filters}>
       <Flex className={classes.filtersBox}>
@@ -49,9 +59,9 @@ const MenuFilterBar: FunctionComponent<MenuFilterBarProps> = () => {
             />
           </Stack>
           <Stack className={classes.filter}>
-            <Title order={4} className={classes.resetButtonHeader}>ы</Title>
+            <Title order={4} className={classes.resetButtonHeader}>Сбросить</Title>
             <CloseButton
-              disabled={isFiltersActive}
+              disabled={!isFiltersActive} // Исправлена логика кнопки сброса (активна, когда фильтры применены)
               onClick={resetFilters}
               className={classes.resetButton}
             />
@@ -66,7 +76,7 @@ const MenuFilterBar: FunctionComponent<MenuFilterBarProps> = () => {
           position={{ top: 10, right: theme.spacing.md }}
           hiddenFrom="sm"
           hidden={opened}
-          >
+        >
           <ActionIcon
             onClick={open}
             hiddenFrom="sm"
@@ -74,11 +84,7 @@ const MenuFilterBar: FunctionComponent<MenuFilterBarProps> = () => {
             variant="transparent"
             size={25}
           >
-            { isFiltersActive ?
-              <IconFilter />
-              :
-              <IconFilterFilled />
-            }
+            {isFiltersActive ? <IconFilterFilled /> : <IconFilter />}
           </ActionIcon>
         </Affix>
       </Flex>
@@ -87,6 +93,7 @@ const MenuFilterBar: FunctionComponent<MenuFilterBarProps> = () => {
 };
 
 export default MenuFilterBar;
+
 export const FilterContext = createContext({
   categoryOptions: [] as ComboboxItem[],
   categoryValue: [] as string[] | undefined,

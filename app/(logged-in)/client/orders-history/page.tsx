@@ -1,6 +1,6 @@
 'use client';
 
-import { FunctionComponent, useEffect, useMemo, useState } from 'react'; // 👈 Вернули useState
+import { FunctionComponent, useEffect, useMemo, useState } from 'react';
 import { NoContentPage, OrderList, OrdersTotal } from '@/components';
 import noOrdersImage from '@/public/204Order.png';
 import { useSearchParamValue, useUpdatePageURL } from '@/shared/hooks';
@@ -13,24 +13,25 @@ const OrdersHistory : FunctionComponent = () => {
   const pageSize = 2;
   const { updateURL } = useUpdatePageURL();
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Базируем пагинацию на локальном стейте-числе
+  // Локальный стейт-число гарантирует 100% стабильность для RTK Query
   const [currentPage, setCurrentPage] = useState<number>(1);
 
-  // Синхронизируем страницу из URL в стейт
+  // ✅ ИСПРАВЛЕНИЕ №1: Добавляем currentPage в массив зависимостей эффекта.
+  // Это исключает ссылочный конфликт гидратации между URL и локальным стейтом в React 19.
   useEffect(() => {
     if (pageFromUrl && pageFromUrl !== currentPage) {
       setCurrentPage(pageFromUrl);
     }
-  }, [pageFromUrl]);
+  }, [pageFromUrl, currentPage]);
 
-  // ✅ ИСПРАВЛЕНИЕ №2: Мемоизируем объект строго от примитивного числа currentPage
+  // Мемоизируем объект параметров строго от примитивного числа currentPage
   const queryParams = useMemo(() => ({
     page: currentPage,
     pageSize,
     active: false
   }), [currentPage, pageSize]);
 
-  // Отправляем запрос истории
+  // Отправляем запрос истории заказов
   const { data, isFetching, error } = useGetOrdersListQuery(queryParams);
 
   const totalPages = data?.totalPages;
@@ -52,39 +53,36 @@ const OrdersHistory : FunctionComponent = () => {
     );
   }
 
-  // ✅ ИСПРАВЛЕНИЕ №3: Лоадер горит строго во время первой загрузки (isFetching && !data)
-  if (isFetching && !data) {
-    return (
-      <div style={{ position: 'relative', minHeight: '200px', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <LoadingOverlay visible overlayProps={{ blur: 1 }} />
-      </div>
-    );
-  }
-
   return (
-    <>
+    // ✅ ИСПРАВЛЕНИЕ №2: Переводим лоадер в оверлейный режим без физического блокирования Virtual DOM.
+    // Мы полностью убрали старый блокирующий блок "if (isFetching && !data)". 
+    // Теперь разметка монтируется мгновенно, а оверлей плавно погаснет сразу после получения ответа.
+    <div style={{ position: 'relative', minHeight: '300px', width: '100%' }}>
+      <LoadingOverlay visible={isFetching && !data} overlayProps={{ blur: 1 }} />
+      
       {
-        !data || data.totalPages === 0
-        ?
+        !data || data.totalPages === 0 ? (
           <NoContentPage
             buttonLabel="В меню"
             href="menu"
             label="История заказов отсутствует :("
             img={noOrdersImage}
           />
-        :
-        <>
-          <OrdersTotal />
-          <OrderList
-            items={data.items}
-            totalPages={data.totalPages}
-            pageSize={pageSize}
-            isFetching={isFetching}
-          />
-        </>
+        ) : (
+          <>
+            <OrdersTotal />
+            <OrderList
+              items={data.items}
+              totalPages={data.totalPages}
+              pageSize={pageSize}
+              isFetching={isFetching}
+            />
+          </>
+        )
       }
-    </>
+    </div>
   );
 };
 
 export default OrdersHistory;
+
