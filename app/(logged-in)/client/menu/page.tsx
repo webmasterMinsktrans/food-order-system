@@ -7,29 +7,19 @@ import classes from './styles.module.scss';
 import { ErrorPage, Pagination } from '@/UI';
 import { useGetActualMenuQuery } from '@/lib/api/menuApi';
 import { useAppDispatch, useSearchParamValue, useAppSelector } from '@/shared/hooks';
-import { MenuPositionDto } from '@/shared/types';
 import { setMenu } from '@/lib/features/menu/menuSlice';
 import { CookieService } from '@/shared/services';
 import { selectDeliveryDestination } from '../../../../lib/features/cart/cartSlice';
-import { useSessionStorage } from '@mantine/hooks';
 
 const Menu : FunctionComponent = () => {
   const pageSize = CookieService.getDefaultMenuPageSize();
-  
-  const [pageCount, setPageCount] = useSessionStorage({
-    key: 'menu-total-pages',
-    defaultValue: 1,
-    getInitialValueInEffect: true, // Защита гидратации пагинации при первом входе
-  });
   
   const page = useSearchParamValue<number>('page');
   const type = useSearchParamValue<string>('type');
   const categoryId = useSearchParamValue<string>('category');
   const destination = useAppSelector(selectDeliveryDestination);
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Жестко контролируем тип productType.
-  // Если роутер Next.js 15 при клике передал массив или объект, 
-  // мы принудительно извлекаем чистую строку, защищая useMemo от ссылочного взрыва.
+  // ✅ Жестко контролируем тип productType, пресекая передачу массивов или некорректных объектов
   const cleanType = useMemo(() => {
     if (!type) return undefined;
     if (Array.isArray(type)) return type[0]?.toString() || undefined;
@@ -37,14 +27,16 @@ const Menu : FunctionComponent = () => {
     return type.toString();
   }, [type]);
 
+  // Стабилизируем ссылку на queryParams
   const queryParams = useMemo(() => ({
     page: page ? +page : undefined,
     pageSize,
     dishCategoryId: categoryId?.toString() ?? undefined,
-    productType: cleanType, // Передаем очищенную стабильную строку
+    productType: cleanType,
     destinationOfficeId: destination?.id ?? 0,
   }), [page, pageSize, categoryId, cleanType, destination?.id]);
 
+  // Запрос на бэкенд блокируется во время SSR на сервере
   const { data, error, isFetching, refetch } = useGetActualMenuQuery(
     queryParams,
     { skip: destination === null || !destination?.id || typeof window === 'undefined' }
@@ -53,24 +45,23 @@ const Menu : FunctionComponent = () => {
   const dispatch = useAppDispatch();
 
   const menuItems = data?.items;
-  const totalPages = data?.totalPages;
+  
+  // ✅ ИСПРАВЛЕНИЕ №1: Количество страниц берем НАПРЯМУЮ из ответа API.
+  // Если данные еще в пути или произошел сброс фильтра — по умолчанию возвращаем 1.
+  // Никаких sessionStorage и каскадных эффектов setPageCount, ломающих React 19!
+  const pageCount = data?.totalPages ?? 1;
 
   useEffect(() => {
     if (menuItems) {
       dispatch(setMenu(menuItems));
     }
-    if (typeof totalPages === 'number') {
-      setPageCount(totalPages);
-    }
-  }, [menuItems, totalPages, dispatch, setPageCount]);
+  }, [menuItems, dispatch]);
 
   const isMenuLoading = isFetching || !data || typeof window === 'undefined';
 
-  // ✅ ИСПРАВЛЕНИЕ №2: Мемоизируем блок пагинации.
-  // Теперь, когда модератор или пользователь переключает фильтр "тип блюда",
-  // контейнер пагинации не будет совершать паразитных каскадных ререндеров, 
-  // пока RTK Query полностью не получит новый тотал страниц. 
-  // Это на 100% ликвидирует client-side exception при кликах на фильтры.
+  // ✅ ИСПРАВЛЕНИЕ №2: Мемоизируем блок пагинации, жестко привязав его к примитиву pageCount.
+  // Кнопки пагинации теперь обновляются строго атомарно, когда RTK Query полностью 
+  // обновил кэш. Конфликт каскадных ререндеров с роутером полностью исчерпан.
   const memoizedPagination = useMemo(() => {
     return (
       <Flex w="100%" justify="flex-end" align="flex-end" flex="1 1 auto">
