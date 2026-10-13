@@ -12,20 +12,23 @@ const ActiveOrders : FunctionComponent = () => {
   const pageSize = 2;
   const [page, setPage] = useState(pageFromUrl ?? 1);
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Приводим параметры к строгому строковому или мемоизированному виду.
-  // Это гарантирует, что ключ кэша RTK Query совпадет со статусом 304 от бэкенда Минсктранса.
+  // ✅ ИСПРАВЛЕНИЕ №1: Стабилизируем параметры. 
+  // Если ваш бэкенд Express принимает строку, передаем "true" / "false".
+  // Если бэкенд строго требует boolean, оставляем true, но ОБЯЗАТЕЛЬНО добавляем refetchOnMountOrArgChange ниже.
   const queryParams = useMemo(() => ({ 
     page, 
     pageSize, 
-    active: true // Если бэкенд строго ждет boolean
+    active: true // Передаем легитимный boolean тип
   }), [page, pageSize]);
 
-  // Запрашиваем данные активных заказов.
-  // Добавляем параметр refetchOnMountOrArgChange, чтобы принудительно заставить 
-  // RTK Query поднять данные из правильного локального кэша Redux при статусе 304.
+  // Запрашиваем данные
   const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
-    refetchOnMountOrArgChange: true, // 👈 КРИТИЧЕСКИ ВАЖНО ДЛЯ NEXT.JS 15 ПРИ ОТВЕТАХ 304
+    // ✅ ИСПРАВЛЕНИЕ №2: Этот флаг заставит RTK Query принудительно перепроверить типы 
+    // и поднять данные из правильной ветки оперативной памяти Redux, минуя асинхронные задержки Next.js 15
+    refetchOnMountOrArgChange: true,
   });
+
+  console.log('МИНСКTРАНС ДЕБАГ:', { data, isFetching, error, pageFromUrl, page });
 
   useEffect(() => {
     if (data?.totalPages && data.totalPages !== 0 && data.items?.length === 0) {
@@ -39,24 +42,23 @@ const ActiveOrders : FunctionComponent = () => {
       setPage(targetPage);
     }
   }, [pageFromUrl, page]);
-   console.log('МИНСКTРАНС ДЕБАГ:', { data, isFetching, error, pageFromUrl, page });
+
   if (error) {
     return (
       <ErrorPage
-        message={(error as any)?.data?.message ?? (error as any)?.message ?? 'Ошибка загрузки'}
+        message={(error as any)?.data?.message ?? (error as any)?.message ?? 'Ошибка загрузки заказов'}
       />
     );
   }
 
-  // ✅ ИСПРАВЛЕНИЕ №2: Если идет загрузка ЛИБО данные ЕЩЕ НЕ ИНИЦИАЛИЗИРОВАЛИСЬ в кэше (!data),
-  // принудительно передаем флаг true в OrderList, чтобы скелетоны показывались законно.
-  // Как только данные подтянутся из памяти Redux, флаг переключится в false, и renderItems мгновенно отобразится!
-  const showLoader = isFetching || !data || !data.items;
+  // ✅ ИСПРАВЛЕНИЕ №3: Лоадер должен гореть ТОЛЬКО тогда, когда идет реальная загрузка
+  // И при этом у нас ЕЩЕ НЕТ никаких данных в памяти (!data || !data.items).
+  const showLoader = isFetching && (!data || !data.items);
 
   return (
     <>
       {
-        data?.totalPages === 0
+        !showLoader && (data?.totalPages === 0 || !data?.items)
         ?
           <NoContentPage
             buttonLabel="В меню"
@@ -66,7 +68,7 @@ const ActiveOrders : FunctionComponent = () => {
           />
         :
           <OrderList
-            items={data?.items ?? []} // Безопасный фолбэк для мемоизации списка
+            items={data?.items ?? []}
             totalPages={data?.totalPages ?? 1}
             pageSize={pageSize}
             isFetching={showLoader} // Передаем showLoader
@@ -77,3 +79,4 @@ const ActiveOrders : FunctionComponent = () => {
 };
 
 export default ActiveOrders;
+

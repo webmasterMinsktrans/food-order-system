@@ -18,7 +18,7 @@ const OrdersHistory : FunctionComponent = () => {
     active: false 
   }), [page, pageSize]);
 
-  // Добавляем параметр восстановления кэша при ответах 304
+  // Добавляем refetchOnMountOrArgChange для синхронизации кэша истории
   const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
     refetchOnMountOrArgChange: true,
   });
@@ -39,17 +39,17 @@ const OrdersHistory : FunctionComponent = () => {
   if (error) {
     return (
       <ErrorPage
-        message={(error as any)?.data?.message ?? (error as any)?.message ?? 'Ошибка загрузки'}
+        message={(error as any)?.data?.message ?? (error as any)?.message ?? 'Ошибка загрузки истории заказов'}
       />
     );
   }
 
-  const showLoader = isFetching || !data || !data.items;
+  const showLoader = isFetching && (!data || !data.items);
 
   return (
     <>
       {
-        data?.totalPages === 0
+        !showLoader && (data?.totalPages === 0 || !data?.items)
         ?
           <NoContentPage
             buttonLabel="В меню"
@@ -73,3 +73,4 @@ const OrdersHistory : FunctionComponent = () => {
 };
 
 export default OrdersHistory;
+
