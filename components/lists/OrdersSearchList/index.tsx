@@ -37,8 +37,15 @@ const OrdersSearchList = () => {
     };
   }, [page, order, sort, office, periodParam]);
 
-  // Передаем мемоизированный queryParams вместо создания объекта "на лету"
-  const { data, isFetching, error, refetch } = useSearchOrdersQuery(queryParams);
+  // ✅ ИСПРАВЛЕНИЕ №1: Проверяем, пуст ли параметр офиса (филиала)
+  const isOfficeNotSelected = !office || office === '' || office === 'undefined';
+
+  // Передаем мемоизированный queryParams и управляем выполнением с помощью флага skip.
+  // Запрос не будет "вхолостую" спамить бэкенд, пока модератор не выбрал филиал.
+  const { data, isFetching, error, refetch } = useSearchOrdersQuery(
+    queryParams,
+    { skip: isOfficeNotSelected }
+  );
 
   if (error) {
     return (
@@ -49,8 +56,18 @@ const OrdersSearchList = () => {
     );
   }
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Если идет загрузка (включая самую первую долю секунды инициализации),
-  // строго возвращаем только лоадер, не допуская ложного рендеринга таблицы или заглушки.
+  // ✅ ИСПРАВЛЕНИЕ №2: Если филиал ещё не выбран в фильтре — показываем аккуратное приглашение к действию
+  if (isOfficeNotSelected) {
+    return (
+      <div className={commonClasses.loadingBox} style={{ paddingTop: '60px' }}>
+        <Title order={4} c="dimmed" ta="center" style={{ fontWeight: 500 }}>
+          Для просмотра списка заказов выберите филиал в фильтре выше
+        </Title>
+      </div>
+    );
+  }
+
+  // Если идет загрузка (включая самую первую долю секунды инициализации), строго возвращаем только лоадер
   if (isFetching || !data) {
     return (
       <div className={commonClasses.loadingBox}>
@@ -59,7 +76,7 @@ const OrdersSearchList = () => {
     );
   }
 
-  // ✅ ИСПРАВЛЕНИЕ №2: Проверка отсутствия данных срабатывает только когда data гарантированно загружен
+  // Проверка отсутствия данных срабатывает только когда data гарантированно загружен
   const hasNoData = data.data.length === 0;
 
   if (hasNoData) {
@@ -89,4 +106,3 @@ const OrdersSearchList = () => {
 };
 
 export default OrdersSearchList;
-
