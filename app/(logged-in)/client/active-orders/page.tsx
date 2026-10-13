@@ -8,25 +8,25 @@ import { useGetOrdersListQuery } from '@/lib/api/orderApi';
 import { ErrorPage } from '@/UI';
 
 const ActiveOrders : FunctionComponent = () => {
-  // Читаем страницу напрямую из URL
   const pageFromUrl = useSearchParamValue<number>('page');
   const pageSize = 2;
 
-  // Если роутер еще инициализируется (null), дефолтом берем 1. Никаких useState!
+  // URL — единственный источник правды. Исключаем гонку состояний.
   const currentPage = pageFromUrl ? +pageFromUrl : 1;
 
-  // ✅ Стабилизируем ссылку на параметры через useMemo. 
-  // Теперь при любых микротасках гидратации ссылка в памяти неизменна.
+  // Жестко фиксируем объект параметров в памяти
   const queryParams = useMemo(() => ({ 
     page: currentPage, 
     pageSize, 
     active: true 
   }), [currentPage, pageSize]);
 
-  // Запрашиваем данные активных заказов
+  // ✅ ИСПРАВЛЕНИЕ №1: Добавляем fixedCacheKey и refetchOnMountOrArgChange.
+  // Это принудительно заставит RTK Query проигнорировать пустой серверный HTML-пререндер
+  // и забрать наполненный массив заказов из браузерного ответа 304 Not Modified.
   const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
-    skip: typeof window === 'undefined',
-    refetchOnMountOrArgChange: true, // Гарантирует правильный разбор ответа 304 Not Modified
+    refetchOnMountOrArgChange: true, // Уничтожает пустой серверный кэш при монтировании в DOM
+    fixedCacheKey: 'client-active-orders', // Изолирует ветку кэша в оперативной памяти Redux
   });
 
   if (error) {
@@ -37,11 +37,12 @@ const ActiveOrders : FunctionComponent = () => {
     );
   }
 
-  // Скелетоны лоадера показываются ТОЛЬКО во время первичного fetch-запроса, когда данных в Redux еще нет
-  const showLoader = isFetching && !data;
+  // ✅ ИСПРАВЛЕНИЕ №2: Лоадер должен гореть ТОЛЬКО тогда, когда идет первая загрузка 
+  // И при этом у нас на клиенте реально еще нет наполненного массива (!data || !data.items).
+  const showLoader = isFetching && (!data || !data.items);
 
   return (
-    <>
+    <div style={{ position: 'relative', minHeight: '200px', width: '100%' }}>
       {
         !showLoader && (!data || data.totalPages === 0 || !data.items || data.items.length === 0)
         ?
@@ -59,7 +60,7 @@ const ActiveOrders : FunctionComponent = () => {
             isFetching={showLoader}
           />
       }
-    </>
+    </div>
   );
 };
 

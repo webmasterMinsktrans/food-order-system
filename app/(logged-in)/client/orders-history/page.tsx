@@ -19,9 +19,10 @@ const OrdersHistory : FunctionComponent = () => {
     active: false 
   }), [currentPage, pageSize]);
 
+  // ✅ ИСПРАВЛЕНИЕ №1: Добавляем fixedCacheKey и refetchOnMountOrArgChange для истории
   const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
-    skip: typeof window === 'undefined',
     refetchOnMountOrArgChange: true,
+    fixedCacheKey: 'client-history-orders',
   });
 
   if (error) {
@@ -35,7 +36,7 @@ const OrdersHistory : FunctionComponent = () => {
   const showLoader = isFetching && !data;
 
   return (
-    <>
+    <div style={{ position: 'relative', minHeight: '200px', width: '100%' }}>
       {
         !showLoader && (!data || data.totalPages === 0 || !data.items || data.items.length === 0)
         ?
@@ -56,10 +57,9 @@ const OrdersHistory : FunctionComponent = () => {
             />
           </>
       }
-    </>
+    </div>
   );
 };
 
 export default OrdersHistory;
-
 
