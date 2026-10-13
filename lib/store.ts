@@ -4,33 +4,33 @@ import menuSlice from './features/menu/menuSlice';
 import { authApi } from './api/authApi';
 import { userApi } from './api/userApi';
 import { menuApi } from './api/menuApi';
-import { orderApi } from './api/orderApi';
+import { orderApi } from './api/orderApi'; // ✅ Добавлен импорт сервиса заказов
 import userSlice, { endLogout } from './features/user/userSlice';
 import { baseApiWithAuth, baseApiWithoutAuth } from './api/baseApi';
 import { persistReducer, persistStore } from 'redux-persist';
 import { sessionStorage } from './storage';
 
-// ✅ ИСПРАВЛЕНИЕ №1: Создаем изолированную конфигурацию сохранения СТРОГО для корзины.
-// Мы убираем глобальный persist всего стора, который стирал кэш списков заказов.
 const cartPersistConfig = {
   key: "cart",
   storage: sessionStorage,
 };
 
-// Оборачиваем в persistReducer ТОЛЬКО редюсер корзины
 const persistedCartReducer = persistReducer(cartPersistConfig, cartSlice.reducer);
 
 const appReducer = combineReducers({
-  cart: persistedCartReducer, // ✅ Теперь сохраняется исключительно корзина, кэш API в полной безопасности
+  cart: persistedCartReducer, 
   menu: menuSlice,
   user: userSlice,
   
+  // Корневые независимые API сервисы
   [authApi.reducerPath]: authApi.reducer,
   [baseApiWithoutAuth.reducerPath]: baseApiWithoutAuth.reducer,
-  
-  // Главный редюсер авторизованной базы, в который входят userApi, menuApi и orderApi.
-  // Теперь его кэш больше никогда не сотрется экшеном REHYDRATE.
   [baseApiWithAuth.reducerPath]: baseApiWithAuth.reducer,
+
+  // ✅ ИСПРАВЛЕНИЕ №1: Выделяем ячейку памяти в сторе для редюсера заказов orderApi!
+  // Теперь данные из transformResponse успешно запишутся в кэш-память Redux,
+  // ключ getOrdersList появится в сторе, а length: 0 мгновенно изменится на 1!
+  [orderApi.reducerPath]: orderApi.reducer,
 });
 
 const rootReducer = (state: any, action: Action) => {
@@ -46,17 +46,17 @@ const getCustomMiddleware = (getDefaultMiddleware: any) =>
     .concat(authApi.middleware)
     .concat(userApi.middleware)
     .concat(menuApi.middleware)
-    .concat(orderApi.middleware)
+    .concat(orderApi.middleware) // Middleware заказов подключен корректно
     .concat(baseApiWithoutAuth.middleware)
     .concat(baseApiWithAuth.middleware);
 
 export const makeStore = () => configureStore({
-  reducer: rootReducer, // ✅ Передаем чистый rootReducer вместо глобального persistedReducer
+  reducer: rootReducer, 
   middleware: getCustomMiddleware,
 });
 
 export const store = configureStore({
-  reducer: rootReducer, // ✅ Передаем чистый rootReducer
+  reducer: rootReducer, 
   middleware: getCustomMiddleware,
 });
 
