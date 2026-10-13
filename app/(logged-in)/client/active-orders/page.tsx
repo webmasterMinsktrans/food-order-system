@@ -22,10 +22,19 @@ const ActiveOrders : FunctionComponent = () => {
   }), [currentPage, pageSize]);
 
   // ✅ ИСПРАВЛЕНИЕ: Удаляем свойство fixedCacheKey, оставив только валидный refetchOnMountOrArgChange
-  const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
-    refetchOnMountOrArgChange: true, // Уничтожает пустой серверный кэш при монтировании в DOM
-  });
+  const { data, isFetching, error } = useGetOrdersListQuery(queryParams);
 
+   // 👇 ДОБАВЬТЕ ЭТОТ ИМПОРТ И ЛОГ СЮДА:
+  const rawState = useAppSelector((state) => state);
+  
+  console.log('=== ДЕБАГ СТОР: RootState ===', {
+    hasDataInHook: !!data,
+    hookItemsCount: data?.items?.length,
+    // Смотрим, какие эндпоинты вообще зарегистрированы в оперативной памяти Redux:
+    queriesInCache: rawState?.baseApiWithAuth?.queries 
+      ? Object.keys(rawState.baseApiWithAuth.queries) 
+      : 'no queries',
+  });
   if (error) {
     return (
       <ErrorPage

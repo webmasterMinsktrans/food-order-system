@@ -44,6 +44,11 @@ export const orderApi = createApi({
         };
       },     
       transformResponse: (res) => {
+         console.log('=== ДЕБАГ API: transformResponse ===', {
+          rawResponseReceived: !!res,
+          hasItems: !!(res as any)?.items,
+          itemsLength: (res as any)?.items?.length,
+        });
         if (!res) return undefined; 
         return res as {
           items: OrderMainInfoDto[],
@@ -86,6 +91,7 @@ export const orderApi = createApi({
       // ✅ ИСПРАВЛЕНИЕ №2: Вешаем на эндпоинт суммы свой собственный независимый тег.
       // Теперь вызов общей суммы больше никогда не сможет принудительно стереть кэш списка реальных заказов!
       providesTags: ['OrdersTotalSummary'],
+      
       transformResponse: (res) => res as { totalCount: number, totalPrice: number },
       transformErrorResponse,
     }),
