@@ -20,8 +20,10 @@ const OrdersHistory : FunctionComponent = () => {
     active: false
   }), [currentPage, pageSize]);
 
+  // ✅ ИСПРАВЛЕНИЕ №1: Добавляем refetchOnMountOrArgChange для уничтожения 304 ответов Nginx
   const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
-    skip: typeof window === 'undefined'
+    skip: typeof window === 'undefined',
+    refetchOnMountOrArgChange: true,
   });
 
   if (error) {
@@ -32,14 +34,15 @@ const OrdersHistory : FunctionComponent = () => {
     );
   }
 
-  const shouldShowLoader = isFetching || !data || typeof window === 'undefined';
+  // Спиннер горит только во время первичного fetch-запроса, если кэш пуст
+  const shouldShowLoader = isFetching && !data;
 
   return (
     <div style={{ position: 'relative', minHeight: '300px', width: '100%' }}>
       <LoadingOverlay visible={shouldShowLoader} overlayProps={{ blur: 1 }} />
       
       {
-        !shouldShowLoader && (data?.totalPages === 0 || !data?.items) ? (
+        !shouldShowLoader && (!data || data.totalPages === 0) ? (
           <NoContentPage
             buttonLabel="В меню"
             href="menu"

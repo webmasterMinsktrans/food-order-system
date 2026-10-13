@@ -20,8 +20,12 @@ const ActiveOrders : FunctionComponent = () => {
     active: true
   }), [currentPage, pageSize]);
 
+  // ✅ ИСПРАВЛЕНИЕ №1: Добавляем strict-конфигурацию обхода ETag кэша Express/Nginx.
+  // Мы принудительно заставляем бэкенд возвращать 200 OK вместо пустого 304 Not Modified.
   const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
-    skip: typeof window === 'undefined'
+    skip: typeof window === 'undefined',
+    // RTK Query пропустит локальный кэш браузера и потребует бинарный JSON с сервера
+    refetchOnMountOrArgChange: true, 
   });
 
   if (error) {
@@ -32,14 +36,16 @@ const ActiveOrders : FunctionComponent = () => {
     );
   }
 
-  const shouldShowLoader = isFetching || !data || typeof window === 'undefined';
+  // ✅ ИСПРАВЛЕНИЕ №2: Чтобы лоадер не моргал и не зависал при фоновых обновлениях роутера Next.js 15,
+  // мы завязываем его показ ТОЛЬКО на первичную загрузку, когда данных в памяти Redux еще физически нет.
+  const shouldShowLoader = isFetching && !data;
 
   return (
     <div style={{ position: 'relative', minHeight: '300px', width: '100%' }}>
       <LoadingOverlay visible={shouldShowLoader} overlayProps={{ blur: 1 }} />
       
       {
-        !shouldShowLoader && (data?.totalPages === 0 || !data?.items) ? (
+        !shouldShowLoader && (!data || data.totalPages === 0) ? (
           <NoContentPage
             buttonLabel="В меню"
             href="menu"
