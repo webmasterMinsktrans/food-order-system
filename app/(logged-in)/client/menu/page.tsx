@@ -1,12 +1,12 @@
 'use client';
 
-import { FunctionComponent, useEffect, useState } from 'react';
+import { FunctionComponent, useEffect, useMemo } from 'react'; // 👈 Добавили useMemo
 import { Flex, Stack } from '@mantine/core';
-import { MenuFilterBar, MenuList, NoContentPage } from '@/components';
+import { MenuFilterBar, MenuList } from '@/components';
 import classes from './styles.module.scss';
 import { ErrorPage, Pagination } from '@/UI';
 import { useGetActualMenuQuery } from '@/lib/api/menuApi';
-import { useAppDispatch, useSearchParamValue, useArraySearchParamValue, useAppSelector } from '@/shared/hooks';
+import { useAppDispatch, useSearchParamValue, useAppSelector } from '@/shared/hooks';
 import { MenuPositionDto } from '@/shared/types';
 import { setMenu } from '@/lib/features/menu/menuSlice';
 import { CookieService } from '@/shared/services';
@@ -18,29 +18,44 @@ const Menu : FunctionComponent = () => {
   const [pageCount, setPageCount] = useSessionStorage({
     key: 'menu-total-pages',
     defaultValue: 1,
-    getInitialValueInEffect:false,
+    getInitialValueInEffect: false,
   });
+  
   const page = useSearchParamValue<number>('page');
   const type = useSearchParamValue<string>('type');
   const categoryId = useSearchParamValue<string>('category');
   const destination = useAppSelector(selectDeliveryDestination);
-  const { data, error, isFetching, refetch } = useGetActualMenuQuery({
-      page: page ? +page: undefined,
-      pageSize,
-      dishCategoryId: categoryId?.toString() ?? undefined,
-      productType: type ?? undefined,
-      destinationOfficeId: destination?.id ?? 0,
-    },
-    { skip : destination === null}
+
+  // ✅ ИСПРАВЛЕНИЕ №1: Стабилизируем ссылку на объект параметров через useMemo
+  const queryParams = useMemo(() => ({
+    page: page ? +page : undefined,
+    pageSize,
+    dishCategoryId: categoryId?.toString() ?? undefined,
+    productType: type ?? undefined,
+    destinationOfficeId: destination?.id ?? 0,
+  }), [page, pageSize, categoryId, type, destination?.id]);
+
+  // Передаем мемоизированный queryParams вместо создания объекта "на лету"
+  const { data, error, isFetching, refetch } = useGetActualMenuQuery(
+    queryParams,
+    { skip: destination === null || !destination?.id }
   );
+
   const dispatch = useAppDispatch();
-  const setMenuItems = (items : MenuPositionDto[]) => dispatch(setMenu(items));
+
+  // ✅ ИСПРАВЛЕНИЕ №2: Извлекаем массив элементов и тотал страниц для атомарного отслеживания в useEffect
+  const menuItems = data?.items;
+  const totalPages = data?.totalPages;
+
   useEffect(() => {
-    if (data) {
-      setMenuItems(data.items);
-      setPageCount(data.totalPages);
+    if (menuItems) {
+      dispatch(setMenu(menuItems));
     }
-  }, [data]);
+    if (typeof totalPages === 'number') {
+      setPageCount(totalPages);
+    }
+  }, [menuItems, totalPages, dispatch, setPageCount]);
+
   return (
     <Stack
       className={classes.menuContainer}
@@ -64,7 +79,7 @@ const Menu : FunctionComponent = () => {
         </>
       }
     </Stack>
-);
+  );
 };
 
 export default Menu;

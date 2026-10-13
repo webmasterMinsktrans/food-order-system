@@ -125,6 +125,7 @@ export const cartSlice = createSlice({
     ),
   }
 });
+
 export const {
   increaseDishCount,
   removeFromCart,
@@ -144,21 +145,34 @@ export const {
   selectDeliveryDestination,
   selectCartItem
 } = cartSlice.selectors;
-// Other code such as selectors can use the imported `RootState` type
+
 export const selectCartItems = (state: RootState) => state.cart.cartItems;
-// export const selectCartItemsIds = createSelector(
-//   (state:RootState) => state.cart.cartItems,
-//   items => items.map(item => item.dishId));
 export const selectCartItemsLength = (state: RootState) => state.cart.cartItems.length;
 export const selectCartTotalCount = (state: RootState) =>
   state.cart.cartItems.reduce((sum, item) => sum + item.count, 0);
 export const selectCartItemCount = (state: RootState, menuPositionId: number) =>
   state.cart.cartItems.find(item => item.menuPosition.id === menuPositionId)?.count ?? 0;
 
+// ✅ ИСПРАВЛЕНИЕ: Создаем безопасное no-op хранилище для серверной среды (Node.js)
+const createNoopStorage = () => {
+  return {
+    getItem(_key: string) {
+      return Promise.resolve(null);
+    },
+    setItem(_key: string, value: any) {
+      return Promise.resolve(value);
+    },
+    removeItem(_key: string) {
+      return Promise.resolve();
+    },
+  };
+};
+
+const serverSafeStorage = typeof window !== 'undefined' ? localStorage : createNoopStorage();
 
 const cartPersistConfig = {
   key: "cart",
-  storage: localStorage,
+  storage: serverSafeStorage, // Используем безопасное изолированное хранилище
   whitelist: ["deliveryDestination"],
 };
 

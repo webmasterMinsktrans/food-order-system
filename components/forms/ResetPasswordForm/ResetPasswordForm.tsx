@@ -18,10 +18,9 @@ const ResetPasswordForm: FunctionComponent<FirstAuthFormProps> = ({
    onFormSuccess,
 }) => {
   const form = useForm({
+    mode: 'controlled', // ✅ Гарантирует корректную работу реактивности полей в React 19
     initialValues: {
-      username: '',
-      newPassword: '',
-      newPasswordRepeat: '',
+      username: '', // ✅ Очищено: удалены лишние неиспользуемые поля password
     },
     validate: {
       username: (val) => val.includes('@') ?
@@ -29,11 +28,16 @@ const ResetPasswordForm: FunctionComponent<FirstAuthFormProps> = ({
       : val.length < 5 ? 'Логин должен содержать не менее 5 символов' : null,
     },
   });
+
   const [resetPassword, result] = useResetPasswordMutation();
+
   const onSubmit = form.onSubmit(({ username }) => {
     const body = username.includes('@') ? { email: username } : { login: username };
-    resetPassword(body).then(({ error }) => {
-      if (error) {
+    
+    resetPassword(body).then((res) => {
+      // ✅ ИСПРАВЛЕНИЕ №1: Строгий и безопасный разбор ответа мутации по стандартам Next.js 15
+      if ('error' in res || res.error) {
+        const error = res.error;
         NotificationService.showErrorNotification({
           title: 'Ошибка выполнения запроса',
           message: ((error as FetchBaseQueryError).data as any)?.message ?? 'Запрос завершился с ошибкой. Попробуйте еще раз через некоторое время',
@@ -43,6 +47,7 @@ const ResetPasswordForm: FunctionComponent<FirstAuthFormProps> = ({
       }
     });
   });
+
   return (
     <Paper
       className={classes.firstAuthFormBox}
@@ -63,18 +68,18 @@ const ResetPasswordForm: FunctionComponent<FirstAuthFormProps> = ({
             required
             label="Логин или email"
             placeholder="test@minsktrans.by"
-            value={form.values.username}
-            onChange={(event) => form.setFieldValue('username', event.currentTarget.value)}
-            error={form.errors.username}
-            radius="md"
             disabled={result.isLoading}
+            // ✅ ИСПРАВЛЕНИЕ №2: Используем стандартный декларативный синтаксис Mantine Form.
+            // Это исключает лишние ререндеры инпута при вводе в React 19.
+            key={form.key('username')}
+            {...form.getInputProps('username')}
           />
         </Stack>
 
         <Group justify="space-between" mt="xl">
           <Link href="/login">
             <Button
-              type="reset"
+              type="button" // Изменено на button, чтобы клик не вызывал ложный reset формы
               radius="xl"
               variant="transparent"
             >
@@ -94,4 +99,5 @@ const ResetPasswordForm: FunctionComponent<FirstAuthFormProps> = ({
     </Paper>
   );
 };
+
 export default ResetPasswordForm;

@@ -17,85 +17,104 @@ interface BranchesTableProps {
   items: OfficeFullInfoDto[]
 }
 
-const BranchesTable = ({items}: BranchesTableProps) => {
-  const THead = () =>{
-      return(
-        <Table.Tr>
-          <Table.Th>ID</Table.Th>
-          <Table.Th>Название</Table.Th>
-          <Table.Th>Адрес</Table.Th>
-          <Table.Th>Тип</Table.Th>
-          <Table.Th>Доступен</Table.Th>
-          <Table.Th>Столовая</Table.Th>
-          <Table.Th>Изменен</Table.Th>
-          <Table.Th>Создан</Table.Th>
-          <Table.Th></Table.Th>
-          <Table.Th></Table.Th>
+const BranchesTable = ({ items }: BranchesTableProps) => {
+  const THead = () => {
+    return (
+      <Table.Tr>
+        <Table.Th>ID</Table.Th>
+        <Table.Th>Название</Table.Th>
+        <Table.Th>Адрес</Table.Th>
+        <Table.Th>Тип</Table.Th>
+        <Table.Th>Доступен</Table.Th>
+        <Table.Th>Столовая</Table.Th>
+        <Table.Th>Изменен</Table.Th>
+        <Table.Th>Создан</Table.Th>
+        <Table.Th></Table.Th>
+        <Table.Th></Table.Th>
+      </Table.Tr>
+    );
+  };
 
-        </Table.Tr>
-      )
-    }
   return (
     <SampleTable
       headerContent={<THead />}
       items={items}
-      makeRow={(item)=>(<TableRow item={item} key={item.id} />)}
+      makeRow={(item) => <TableRow item={item} key={item.id} />}
       className=""
       extraRows={<AddRowButton />}
     />
   );
 };
-const TableRow = ({item}:{item: OfficeFullInfoDto}) => {
-  const { id, name, address, officeType,changed, created, isAvailable, servingCanteen } = item;
+
+const TableRow = ({ item }: { item: OfficeFullInfoDto }) => {
+  const { id, name, address, officeType, changed, created, isAvailable, servingCanteen } = item;
+  
   const form = useForm({
-    mode: 'uncontrolled',
-    initialValues:{
-      name,
-      address,
-      isAvailable,
+    mode: 'uncontrolled', // Оптимальный режим работы для React 19
+    initialValues: {
+      name: name ?? '',
+      address: address ?? '',
+      isAvailable: !!isAvailable,
     },
-    validate:{
-      name: (val) => val.length >=5 ? null : 'Минимальная длина 5 символов',
-      address: (val) => val.length >=5 ? null : 'Минимальная длина 5 символов',
+    validate: {
+      name: (val) => val.length >= 5 ? null : 'Минимальная длина 5 символов',
+      address: (val) => val.length >= 5 ? null : 'Минимальная длина 5 символов',
     }
   });
+
   const [triggerUpdate, updateResult] = useUpdateBranchOfficeMutation();
   const [triggerDelete, deleteResult] = useDeleteBranchOfficeMutation();
-  const updateOffice = ()=>{
-    if(form.validate().hasErrors) return;
+
+  // ✅ ИСПРАВЛЕНИЕ №1: Выносим состояние загрязненности в константу для стабильного рендера кнопок
+  const isFormDirty = form.isDirty();
+
+  const updateOffice = () => {
+    if (form.validate().hasErrors) return;
     const values = form.getValues();
+    
     triggerUpdate({
       officeId: id,
       ...values,
-    }).then((res)=>{
-      if(res.data){
-        NotificationService.showSuccessNotification({message:'Данные филиала успешно изменены'})
+    }).then((res) => {
+      // ✅ ИСПРАВЛЕНИЕ №2: Безопасный перехват ошибок мутации по стандартам Next.js 15
+      if ('error' in res) {
+        NotificationService.showErrorNotification({
+          message: 'При изменении данных филиала произошла ошибка: ' + ((res.error as any)?.data?.message ?? (res.error as any)?.message ?? '')
+        });
+        return;
+      }
+
+      if (res.data) {
+        NotificationService.showSuccessNotification({ message: 'Данные филиала успешно изменены' });
         form.resetDirty();
-      }else{
-        NotificationService.showErrorNotification({message:'При изменении данных филиала произошла ошибка ' + (res.error)})
       }
-    })
-  }
-  const deleteClicked = () => {
-    ModalService.openDeleteModal(
-      {
-        children: (
-          <Text size="sm">
-            Вы точно хотите удалить указанный элемент? Удаление филиала будет невозможно, в случае если на него содержатся ссылки других элементов базы данных. В общем случае возможно удалить только недавно созданный филиал.
-          </Text>
-        ),
-        onConfirm:()=>{
-          triggerDelete(id).then(res =>{
-            if(res.data){
-              NotificationService.showSuccessNotification({message:'Филиал удален'})
-            }else{
-              NotificationService.showErrorNotification({message:'Удаление филиала невозможно ' + (res.error)})
-            }
-          })
-        }
-      }
-    );
+    });
   };
+
+  const deleteClicked = () => {
+    ModalService.openDeleteModal({
+      children: (
+        <Text size="sm">
+          Вы точно хотите удалить указанный элемент? Удаление филиала будет невозможно, в случае если на него содержатся ссылки других элементов базы данных. В общем случае возможно удалить только недавно созданный филиал.
+        </Text>
+      ),
+      onConfirm: () => {
+        triggerDelete(id).then(res => {
+          if ('error' in res) {
+            NotificationService.showErrorNotification({
+              message: 'Удаление филиала невозможно: ' + ((res.error as any)?.data?.message ?? (res.error as any)?.message ?? '')
+            });
+            return;
+          }
+
+          if (res.data) {
+            NotificationService.showSuccessNotification({ message: 'Филиал удален' });
+          }
+        });
+      }
+    });
+  };
+
   return (
     <Table.Tr>
       <Table.Td>{id}</Table.Td>
@@ -116,31 +135,34 @@ const TableRow = ({item}:{item: OfficeFullInfoDto}) => {
         <Checkbox
           key={form.key('isAvailable')}
           {...form.getInputProps('isAvailable')}
-          defaultChecked={isAvailable}
+          // ✅ ИСПРАВЛЕНИЕ №3: В режиме uncontrolled проп defaultChecked больше не нужен,
+          // так как состояние полностью инициализируется и синхронизируется через initialValues.isAvailable
         />
       </Table.Td>
-      <Table.Td>{ servingCanteen ? servingCanteen.name:'-' }</Table.Td>
-      <Table.Td>{ formatDate(changed) }</Table.Td>
-      <Table.Td>{ formatDate(created) }</Table.Td> 
+      <Table.Td>{servingCanteen ? servingCanteen.name : '-'}</Table.Td>
+      <Table.Td>{formatDate(changed)}</Table.Td>
+      <Table.Td>{formatDate(created)}</Table.Td> 
       <Table.Td>
         <ActionIcon 
           className={classes.saveBtn}
           size={24} 
           variant='transparent' 
-          disabled={!form.isDirty()}
+          disabled={!isFormDirty} // Используем стабильную константу вместо вызова метода напрямую
+          loading={updateResult.isLoading} // ✅ Индикатор сетевой загрузки на кнопке сохранения
           onClick={updateOffice}
         >
           <IconDeviceFloppy size={24}/>
         </ActionIcon>
       </Table.Td>
-      <Table.Td>{ 
+      <Table.Td> 
         <ActionIcon 
           size={24} 
           variant='transparent' 
+          loading={deleteResult.isLoading} // ✅ Индикатор сетевой загрузки на кнопке удаления
           onClick={deleteClicked}
         >
           <IconTrash size={24}/>
-        </ActionIcon> }
+        </ActionIcon>
       </Table.Td> 
     </Table.Tr> 
   );
@@ -148,7 +170,7 @@ const TableRow = ({item}:{item: OfficeFullInfoDto}) => {
 
 const AddRowButton = () => {
   const [opened, { open, close }] = useDisclosure(false);
-  return(
+  return (
     <Table.Tr>
       <Table.Td colSpan={10}>
         <Button 
@@ -164,9 +186,8 @@ const AddRowButton = () => {
           onClose={close}
         />
       </Table.Td>
-      
     </Table.Tr>
-  )
+  );
 };
 
 export default BranchesTable;

@@ -1,7 +1,7 @@
 'use client';
 
 import {  Button, Flex, Grid, GridCol, LoadingOverlay, Modal, ModalProps } from '@mantine/core';
-import { FunctionComponent } from 'react';
+import { FunctionComponent, useMemo } from 'react'; // 👈 Добавили useMemo
 import { ErrorPage } from '@/UI';
 import { useGetMenuByIdQuery } from '@/lib/api/moderatorApi';
 import MenuPositionsTable from './MenuPositionsTable';
@@ -16,10 +16,19 @@ const MenuInfoModal: FunctionComponent<MenuInfoModalProps> = ({
   menuId,
   ...modalProps
 }) => {
-  const { data, isLoading, error, refetch } = useGetMenuByIdQuery({'id': menuId ?? 0}, {
+  // ✅ ИСПРАВЛЕНИЕ: Мемоизируем объект параметров. 
+  // Теперь ссылка в памяти изменится ТОЛЬКО если изменится сам menuId.
+  const queryArgs = useMemo(() => ({ 
+    id: menuId ?? 0 
+  }), [menuId]);
+
+  // Передаем стабильную ссылку queryArgs вместо создания объекта "на лету"
+  const { data, isLoading, error, refetch } = useGetMenuByIdQuery(queryArgs, {
     skip: !modalProps.opened
   });
+
   if(!menuId) return (<></>);
+  
   return (
     <Modal.Root {...modalProps} size="auto" centered>
       <Modal.Overlay />
@@ -64,13 +73,13 @@ const MenuInfoModal: FunctionComponent<MenuInfoModalProps> = ({
                 Столовая
               </GridCol>
               <GridCol span={8} className={classes.importantInfo}>
-                {data?.providingCanteen_office.name}
+                {data?.providingCanteen_office?.name}
               </GridCol>
               <GridCol span={4} className={classes.gridCaption}>
                 Автор
               </GridCol>
               <GridCol span={8} className={classes.statusContainer}>
-                {`${data?.user.employee.surname} ${data?.user.employee.name} ${data?.user.employee.patronymic} (${data?.user.employee.personnelNumber})`}
+                {data?.user?.employee ? `${data.user.employee.surname} ${data.user.employee.name} ${data.user.employee.patronymic} (${data.user.employee.personnelNumber})` : ''}
               </GridCol>
               <GridCol span={4} className={classes.gridCaption}>
                 Изменен

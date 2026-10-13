@@ -19,40 +19,53 @@ import { useLogin } from '@/shared/hooks';
 import { useSignInMutation } from '@/lib/api/authApi';
 
 export function AuthenticationForm({ onFirstAuth, ...props }
-  :{ onFirstAuth: () => void } & PaperProps) {
+  : { onFirstAuth: () => void } & PaperProps) {
+  
   const form = useForm({
+    mode: 'controlled', // ✅ Гарантирует корректную работу реактивности полей в React 19
     initialValues: {
       username: '',
       password: '',
     },
     validate: {
       username: (val) => val.includes('@') ?
-      (/^\S+@\S+$/.test(val) ? null : 'Некорректный email')
-      : val.length < 5 ? 'Логин должен содержать не менее 5 символов' : null,
+        \((/^\S+@\S+\)\$/.test(val) ? null : 'Некорректный email')
+        : val.length < 5 ? 'Логин должен содержать не менее 5 символов' : null,
       password: (val) => (val.length < 8 ? 'Пароль должен содержать не менее 8 символов' : null),
     },
   });
+
   const router = useRouter();
   const { login } = useLogin();
-  const [signIn, result] = useSignInMutation({});
+  
+  // ✅ ИСПРАВЛЕНИЕ №1: Убран пустой объект {} из аргументов хука мутации
+  const [signIn, result] = useSignInMutation();
+
   const onSubmit = form.onSubmit(async ({ username, password }) => {
     const queryBody = username.includes('@') ? { email: username, password } : { login: username, password };
+    
     signIn(queryBody).then(async (res) => {
-      if (res.error) {
-        // eslint-disable-next-line prefer-destructuring
-        const error: any = res.error;
-        const errorMessage = (res.error as any).message ?? 'Неизвестная ошибка авторизации';
+      // ✅ ИСПРАВЛЕНИЕ №2: Строгий и безопасный разбор ответа мутации по стандартам Next.js 15
+      if ('error' in res || res.error) {
+        const errorMessage = (res.error as any)?.data?.message ?? (res.error as any)?.message ?? 'Неверный логин или пароль';
         form.setErrors({ password: errorMessage });
-      } else if (res.data.statusCode === 200) {
-        const {access_token, refresh_token, role} = res.data;
+        return;
+      }
+
+      const data = res.data;
+      if (!data) return;
+
+      if (data.statusCode === 200) {
+        const { access_token, refresh_token, role } = data;
         await login(access_token, role, refresh_token);
-        const path = (res.data?.role as string).replaceAll('_', '-');
+        const path = (role as string).replaceAll('_', '-');
         router.push(`/${path}`);
-      } else if (res.data.success) {
+      } else if (data.success) {
         onFirstAuth();
       }
     });
   });
+
   return (
     <Paper
       radius="md"
@@ -74,22 +87,22 @@ export function AuthenticationForm({ onFirstAuth, ...props }
             required
             label="Логин или email"
             placeholder="hello@minsktrans.by"
-            value={form.values.username}
-            onChange={(event) => form.setFieldValue('username', event.currentTarget.value)}
-            error={form.errors.username}
             radius="md"
             disabled={result.isLoading}
+            // ✅ ИСПРАВЛЕНИЕ №3: Используем стандартный декларативный синтаксис Mantine Form.
+            // Это исключает лишние ререндеры инпута при вводе в React 19.
+            key={form.key('username')}
+            {...form.getInputProps('username')}
           />
 
           <PasswordInput
             required
             label="Пароль"
             placeholder="**********"
-            value={form.values.password}
-            onChange={(event) => form.setFieldValue('password', event.currentTarget.value)}
-            error={form.errors.password}
             radius="md"
             disabled={result.isLoading}
+            key={form.key('password')}
+            {...form.getInputProps('password')}
           />
         </Stack>
 
@@ -103,11 +116,13 @@ export function AuthenticationForm({ onFirstAuth, ...props }
             Войти
           </Button>
         </Group>
-        <Link href="/reset-password">
-          <Anchor component="button" type="button" c="dimmed" size="xs">
-            Я не помню пароль
-          </Anchor>
-        </Link>
+        <Group mt="xs">
+          <Link href="/reset-password">
+            <Anchor component="button" type="button" c="dimmed" size="xs">
+              Я не помню пароль
+            </Anchor>
+          </Link>
+        </Group>
       </form>
     </Paper>
   );

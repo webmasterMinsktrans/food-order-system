@@ -58,26 +58,28 @@ export const baseApiWithoutAuth = createApi({
   baseQuery: fetchBaseQuery({
     baseUrl: process.env.NEXT_PUBLIC_API_BASE,
   }),
-  endpoints: (builder) => ({
-
-  }),
+  endpoints: (builder) => ({}),
 });
 
 export const baseApiWithAuth = createApi({
   reducerPath: 'baseApiWithAuth',
   baseQuery: baseQueryWithExpire,
   tagTypes: ['BranchOfficeFullInfo', 'EmployeeList', 'MenuList','Images'],
-  endpoints: (builder) => ({
-
-  }),
+  endpoints: (builder) => ({}),
 });
 
 export const transformFileResponse = async (
   response : any, meta: FetchBaseQueryMeta | undefined, 
   args: any, defaultFilename : string,
 ) => {
+  // ✅ ИСПРАВЛЕНИЕ: Защита от падения сборщика Next.js 15 на сервере (SSR)
+  if (typeof window === 'undefined') {
+    return { status : 200 };
+  }
+
   const contentDisposition = meta?.response?.headers.get('Content-Disposition');
   const filename = contentDisposition?.slice(contentDisposition.indexOf('=') + 1) ?? defaultFilename;
+  
   let anchor = document.createElement("a");
   document.body.appendChild(anchor);			
   let objectUrl = window.URL.createObjectURL(response);

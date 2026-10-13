@@ -10,33 +10,40 @@ import { IconSpider } from "@tabler/icons-react";
 import { useSearchParamValue } from "@/shared/hooks";
 import classes from './styles.module.scss';
 
-interface MenuListFormProps {
-  
-}
+interface MenuListFormProps {}
 
 const MenuListForm = (props: MenuListFormProps) => {
   const [fetch, result] = useLazyGetMenuListQuery();
-  const {data, error, isLoading} = result;
+  const { data, error, isLoading } = result;
   const pageFromUrl = useSearchParamValue<number>('page');
+  
   const form = useForm({
-      mode:'controlled',
-      initialValues: {
-        deliveryDestinationId: '',
-        pageSize: '20'
-      },
-      validate:{
-        deliveryDestinationId: (val) => !val ? 'Выберите место доставки' : null,
-      },
+    mode: 'controlled',
+    initialValues: {
+      deliveryDestinationId: '',
+      pageSize: '20'
+    },
+    validate: {
+      deliveryDestinationId: (val) => !val ? 'Выберите место доставки' : null,
+    },
   });
-  useEffect(()=>{
-    const {deliveryDestinationId, pageSize} = form.getValues();
-    if(!deliveryDestinationId) return;
+
+  // ✅ ИСПРАВЛЕНИЕ: Достаем значения контролируемо через watch или getValues() напрямую в константы
+  const deliveryDestinationId = form.getValues().deliveryDestinationId;
+  const pageSize = form.getValues().pageSize;
+  const currentPage = pageFromUrl ?? 1;
+
+  // ✅ Теперь useEffect следит за конкретными строками/числами, а не за ссылкой на объект
+  useEffect(() => {
+    if (!deliveryDestinationId) return;
+
     fetch({
-      page: pageFromUrl ?? 1, 
+      page: currentPage, 
       pageSize: +pageSize, 
       destinationOfficeId: +deliveryDestinationId
     });
-  },[form.getValues(), pageFromUrl]);
+  }, [deliveryDestinationId, pageSize, currentPage, fetch]); // Безопасные зависимости
+
   return (
     <div className={classes.formBox}>
       <Group className={classes.selectGroup}>
@@ -58,7 +65,7 @@ const MenuListForm = (props: MenuListFormProps) => {
       {data && <MenuListTable items={data.menuList} />}
       {error && <ErrorPage message={(error as any).message}/>}
       {
-        !form.getValues().deliveryDestinationId &&
+        !deliveryDestinationId &&
         <Box className={classes.emptyContent}>
           <IconSpider size={160} stroke={1} />
           <Title>Филиал не выбран</Title>

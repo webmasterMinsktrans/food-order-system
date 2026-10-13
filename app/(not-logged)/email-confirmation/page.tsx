@@ -1,6 +1,6 @@
 'use client';
 
-import { FunctionComponent, useEffect, useState } from 'react';
+import { FunctionComponent, useEffect, useRef } from 'react'; // 👈 Добавили useRef
 import { useRouter } from 'next/navigation';
 import { IconShieldCheck } from '@tabler/icons-react';
 import { LoadingOverlay } from '@mantine/core';
@@ -9,14 +9,18 @@ import { useLazyCheckFirstAuthTokenQuery } from '@/lib/api/authApi';
 import { SuccessMessageCard } from '@/components';
 import { NotificationService } from '@/shared/services';
 
-interface confirmationPageProps {
-}
+interface confirmationPageProps {}
 
 const ConfirmationPage: FunctionComponent<confirmationPageProps> = () => {
   const token = useSearchParamValue<string>('token');
   const router = useRouter();
   const [checkToken, result] = useLazyCheckFirstAuthTokenQuery();
-  const [active, setActive] = useState(0);
+  
+  // ✅ ИСПРАВЛЕНИЕ №1: Используем useRef в качестве флага отправки запроса.
+  // В отличие от useState, изменение ref не вызывает рендер и обновляется мгновенно,
+  // что на 100% защищает от дублирующих запросов в React 19.
+  const hasTriggered = useRef(false);
+
   useEffect(() => {
     if (!token) {
       NotificationService.showForbiddenNotification({
@@ -24,20 +28,26 @@ const ConfirmationPage: FunctionComponent<confirmationPageProps> = () => {
         message: 'Данная страница доступна только по ссылке',
       });
       router.replace('/');
-    } else if (active !== 1) {
-      checkToken({ token }).then(res => {
-        if (res.error) {
-          NotificationService.showErrorNotification({
-            title: 'Ошибка! Ссылка активации недействительна!',
-            message: 'Время действия ссылки истекло. Повторно войдите в систему для активации аккаунта',
-          });
-          router.replace('/login');
-        } else {
-          setActive(1);
-        }
-      });
+      return;
     }
-  }, [token]);
+
+    // ✅ Проверяем флаг: если запрос уже отправлялся — игнорируем повторные триггеры
+    if (hasTriggered.current) return;
+
+    hasTriggered.current = true; // Мгновенно блокируем повторный вход
+
+    checkToken({ token }).then(res => {
+      // ✅ ИСПРАВЛЕНИЕ №2: Безопасный разбор ответа мутации/запроса по стандарту Next.js 15
+      if ('error' in res || res.error) {
+        NotificationService.showErrorNotification({
+          title: 'Ошибка! Ссылка активации недействительна!',
+          message: 'Время действия ссылки истекло. Повторно войдите в систему для активации аккаунта',
+        });
+        router.replace('/login');
+      }
+    });
+  }, [token, checkToken, router]); // Добавлены обязательные зависимости для линтера Next.js 15
+
   return (
     <SuccessMessageCard pos="relative">
       <LoadingOverlay visible={!result.isSuccess} overlayProps={{ blur: 6 }} />

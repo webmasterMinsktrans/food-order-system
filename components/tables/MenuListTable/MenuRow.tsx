@@ -2,7 +2,7 @@
 
 import { Table, Text } from "@mantine/core";
 import { MenuListItem } from "@/shared/types";
-import {  useState } from "react";
+import { useState } from "react";
 import React from "react";
 import MenuInfoModal from "@/components/cards/MenuInfoCard";
 import { formatDate } from "@/shared/helpers/formatHelper";
@@ -14,18 +14,27 @@ import { useDeleteMenuMutation, useUpdateMenuMutation } from "@/lib/api/moderato
 import { ModalService, NotificationService } from "@/shared/services";
 
 const TableRow = (item: MenuListItem) => {
-  const {id, name, relevantFrom, expire, menuPositionsCount, author, providingCanteen, created} = item;
+  const { id, name, relevantFrom, expire, menuPositionsCount, author, providingCanteen, created } = item;
   const [opened, setOpened] = useState(false);
+  
   const form = useForm({
-    initialValues:{
+    mode: 'controlled', // Гарантирует правильную синхронизацию с инпутами в React 19
+    initialValues: {
       relevantFrom: new Date(relevantFrom),
       expire: new Date(expire)
     }
   });
-  const [updateMenu, result] = useUpdateMenuMutation();
-  const [deleteMenu, deleteResult] = useDeleteMenuMutation();
-  const stopPropagation = (e: any) => e.stopPropagation();
-  const onUpdate=  (e: any) => {
+
+  const [updateMenu] = useUpdateMenuMutation();
+  const [deleteMenu] = useDeleteMenuMutation();
+  
+  const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
+
+  // ✅ ИСПРАВЛЕНИЕ №1: Выносим булево состояние наружу для стабильного вычисления активности кнопок в React 19
+  const isFormDirty = form.isDirty();
+  const formDirtyFields = form.getDirty();
+
+  const onUpdate = (e: React.MouseEvent) => {
     e.stopPropagation();
     updateMenu({
       id, 
@@ -33,45 +42,50 @@ const TableRow = (item: MenuListItem) => {
         ...form.getValues()
       }
     })
-    .then(() => {
-      NotificationService.showSuccessNotification({
-        title: `Данные меню ${id} успешно изменены изменены!`,
-        message: ''
-      })
-      form.resetDirty();
-    })
-    .catch((err)=>{
-      NotificationService.showErrorNotification({
-        title: 'Ошибка обновления данных меню!',
-        message: err?.message
-      })
-    })
-  }
-  const onDelete=  (e: any) =>{
-    e.stopPropagation();
-    ModalService.openDeleteModal(
-      {
-        children: (
-          <Text size="sm">
-            Вы точно хотите удалить указанный элемент? Удаление меню приведет к <strong>полной потере данных</strong> меню.
-          </Text>
-        ),
-        onConfirm:()=>{
-          deleteMenu({id})
-          .then(res =>{
-            if(res.data){
-              NotificationService.showSuccessNotification({message:`Меню с ${id} удален`})
-            }else{
-              NotificationService.showErrorNotification({message:'Удаление меню невозможно ' + ((res.error as any).message)})
-            }
-          })
-        }
+    .then((res) => {
+      // ✅ ИСПРАВЛЕНИЕ №2: Безопасный разбор ответа мутации в Next.js 15
+      if ('error' in res) {
+        NotificationService.showErrorNotification({
+          title: 'Ошибка обновления данных меню!',
+          message: (res.error as any)?.data?.message ?? (res.error as any)?.message ?? 'Ошибка сервера'
+        });
+        return;
       }
-    );
-  }
+      
+      NotificationService.showSuccessNotification({
+        title: `Данные меню ${id} успешно изменены!`,
+        message: ''
+      });
+      form.resetDirty();
+    });
+  };
+
+  const onDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    ModalService.openDeleteModal({
+      children: (
+        <Text size="sm">
+          Вы точно хотите удалить указанный элемент? Удаление меню приведет к <strong>полной потере данных</strong> меню.
+        </Text>
+      ),
+      onConfirm: () => {
+        deleteMenu({ id })
+        .then(res => {
+          if ('data' in res && res.data) {
+            NotificationService.showSuccessNotification({ message: `Меню с ID ${id} удалено` });
+          } else {
+            NotificationService.showErrorNotification({ 
+              message: 'Удаление меню невозможно: ' + ((res.error as any)?.data?.message ?? (res.error as any)?.message ?? '') 
+            });
+          }
+        });
+      }
+    });
+  };
+
   return (
     <React.Fragment>
-      <Table.Tr onClick={()=>setOpened(true)} w={'100%'}>
+      <Table.Tr onClick={() => setOpened(true)} w={'100%'}>
         <Table.Td>{id}</Table.Td>
         <Table.Td>{name}</Table.Td>
         <Table.Td>
@@ -83,10 +97,10 @@ const TableRow = (item: MenuListItem) => {
             {...form.getInputProps('relevantFrom')}
             key={form.key('relevantFrom')}
             className={classes['date-input']}
-            data-dirty={form.getDirty().relevantFrom ? 'true' : null}
+            data-dirty={formDirtyFields.relevantFrom ? 'true' : null}
           />
         </Table.Td>
-        <Table.Td>{
+        <Table.Td>
           <DateTimePicker
             valueFormat="DD MMMM YYYY HH:mm"
             wrapperProps={{
@@ -95,9 +109,9 @@ const TableRow = (item: MenuListItem) => {
             {...form.getInputProps('expire')}
             key={form.key('expire')}
             className={classes['date-input']}
-            data-dirty={form.getDirty().expire ? 'true' : null}
+            data-dirty={formDirtyFields.expire ? 'true' : null}
           />
-        }</Table.Td>
+        </Table.Td>
         <Table.Td>{menuPositionsCount}</Table.Td>
         <Table.Td>{providingCanteen.name}</Table.Td>
         <Table.Td>
@@ -108,13 +122,13 @@ const TableRow = (item: MenuListItem) => {
           onUpdate={onUpdate}
           onDelete={onDelete}
           disabled={{
-            update: !form.isDirty()
+            update: !isFormDirty // Используем стабильную константу
           }}
         />
       </Table.Tr>
       <MenuInfoModal 
         opened={opened} 
-        onClose={()=>setOpened(false)} 
+        onClose={() => setOpened(false)} 
         menuId={id} 
       />
     </React.Fragment>    

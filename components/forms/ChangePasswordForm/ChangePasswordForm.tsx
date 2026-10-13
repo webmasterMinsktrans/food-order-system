@@ -12,30 +12,36 @@ import { NotificationService } from '@/shared/services';
 import { useChangePasswordMutation } from '@/lib/api/authApi';
 
 interface FirstAuthFormProps {
-
   onFormSuccess: () => void,
 }
 
 const FirstAuthForm: FunctionComponent<FirstAuthFormProps> = ({ onFormSuccess }) => {
   const router = useRouter();
   const token = useSearchParamValue<string>('token');
+  
   const form = useForm({
+    mode: 'controlled', // ✅ Гарантирует корректную работу реактивности полей в React 19
     initialValues: {
       newPassword: '',
       newPasswordRepeat: '',
     },
     validate: {
       newPassword: (val) => (passwordStrength(val).id < 2 ?
-      'Пароль должен содержать не менее 8 символов,  1 цифру, маленькую и большую буквы и 1 спецсимвол (!№%*&).' : null),
+      'Пароль должен содержать не менее 8 символов, 1 цифру, маленькую и большую буквы и 1 спецсимвол (!№%*&).' : null),
       newPasswordRepeat: (val, { newPassword }) => (val !== newPassword ?
       'Пароли не совпадают' : null),
     },
   });
+
   const [changePassword, result] = useChangePasswordMutation();
+
   const onSubmit = form.onSubmit(({ newPassword }) => {
     if (!token) return;
-    changePassword({ token, newPassword }).then(({ error }) => {
-      if (error) {
+    
+    changePassword({ token, newPassword }).then((res) => {
+      // ✅ ИСПРАВЛЕНИЕ №1: Строгий и безопасный разбор ответа мутации по стандартам Next.js 15
+      if ('error' in res || res.error) {
+        const error = res.error;
         if ((error as any).status === 401) {
           NotificationService.showForbiddenNotification({
             title: 'Ссылка изменения пароля недействительна',
@@ -62,7 +68,7 @@ const FirstAuthForm: FunctionComponent<FirstAuthFormProps> = ({ onFormSuccess })
       withBorder
     >
       <Text className={classes.header} component="div" pb="sm">
-        Изменениe пароля
+        Изменение пароля
       </Text>
       <Text c="dimmed" size="xs" ta="center">
         придумайте новый пароль и нажмите &apos;Далее&apos;
@@ -74,21 +80,19 @@ const FirstAuthForm: FunctionComponent<FirstAuthFormProps> = ({ onFormSuccess })
             required
             label="Новый пароль"
             placeholder="**********"
-            value={form.values.newPassword}
-            onChange={(event) => form.setFieldValue('newPassword', event.currentTarget.value)}
-            error={form.errors.newPassword}
-            radius="md"
             disabled={result.isLoading}
+            // ✅ ИСПРАВЛЕНИЕ №2: Используем стандартный декларативный синтаксис Mantine Form.
+            // Это исключает лишние ререндеры инпута при вводе в React 19.
+            key={form.key('newPassword')}
+            {...form.getInputProps('newPassword')}
           />
           <PasswordInput
             required
             label="Повторите пароль"
             placeholder="**********"
-            value={form.values.newPasswordRepeat}
-            onChange={(event) => form.setFieldValue('newPasswordRepeat', event.currentTarget.value)}
-            error={form.errors.newPasswordRepeat}
-            radius="md"
             disabled={result.isLoading}
+            key={form.key('newPasswordRepeat')}
+            {...form.getInputProps('newPasswordRepeat')}
           />
         </Stack>
 
@@ -105,4 +109,5 @@ const FirstAuthForm: FunctionComponent<FirstAuthFormProps> = ({ onFormSuccess })
     </Paper>
   );
 };
+
 export default FirstAuthForm;

@@ -33,6 +33,7 @@ const ExportOrdersForm = (props: ExportOrdersFormProps) => {
       deliveryDestinationId: (val) => !val ? 'Выберите место доставки' : null,
     }
   });
+
   const downloadFile = async () => {
     if(form.validate().hasErrors) return;
     const values = form.getValues();
@@ -41,19 +42,36 @@ const ExportOrdersForm = (props: ExportOrdersFormProps) => {
       periodEnd: dayjs(values.periodEnd).format(periodStringFormat),
       deliveryDestinationId: values.deliveryDestinationId,
     };
-    const {data, error} = await query(params);
-    if(error){
-      NotificationService.showErrorNotification({
-        title:'Ошибка выгрузки заказов',
-        message: (error as any)?.message ?? `Возникла непредвиденная ошибка. Невозможно скачать отчет о заказах`
-      })
-    }else{
+
+    try {
+      // ✅ ИСПРАВЛЕНИЕ: Используем .unwrap(), чтобы вытащить чистый Blob из RTK Query
+      const blob = await query(params).unwrap();
+      
+      // ✅ Создаем временную ссылку для браузера, чтобы файл скачался физически
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `orders_${dayjs().format('YYYY-MM-DD')}.docx`);
+      document.body.appendChild(link);
+      link.click();
+      
+      // Очищаем память
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
       NotificationService.showSuccessNotification({
-        title:'Список заказов получен',
+        title: 'Список заказов получен',
         message: 'Заказы пользователей включенные в отчет будут помечены как принятые',
-      })
+      });
+    } catch (error) {
+      // ✅ Безопасный перехват ошибок
+      NotificationService.showErrorNotification({
+        title: 'Ошибка выгрузки заказов',
+        message: (error as any)?.data?.message ?? (error as any)?.message ?? `Возникла непредвиденная ошибка. Невозможно скачать отчет о заказах`
+      });
     }
   }
+
   return (
     <Stack {...props}>
       <Title>

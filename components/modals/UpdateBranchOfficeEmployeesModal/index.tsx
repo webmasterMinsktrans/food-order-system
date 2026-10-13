@@ -4,60 +4,75 @@ import { Button, FileInput, Group, LoadingOverlay, Modal, ModalProps, Stack } fr
 import { OfficeSelect } from "@/components";
 import { useForm } from "@mantine/form";
 import { useUpdateBranchOfficeEmployeesMutation } from "@/lib/api/adminApi";
-import path from "path";
 import commonClasses from '../styles.module.scss';
 import { IconFile } from "@tabler/icons-react";
 import { NotificationService } from "@/shared/services";
 
+interface UpdateBranchOfficeEmployeesModalProps extends ModalProps {}
 
-interface UpdateBranchOfficeEmployeesModalProps extends ModalProps {
-  
-}
-
-const UpdateBranchOfficeEmployeesModal = ({...modalProps}: UpdateBranchOfficeEmployeesModalProps) => {
+const UpdateBranchOfficeEmployeesModal = ({ ...modalProps }: UpdateBranchOfficeEmployeesModalProps) => {
   const form = useForm({
-    initialValues:{
+    mode: 'uncontrolled', // Оптимальный режим работы для React 19
+    initialValues: {
       officeId: undefined as undefined | number,
-      file: undefined as File | null | undefined,
+      file: null as File | null, // Стандартный браузерный тип
     },
-    validate:{
+    validate: {
       file: (val) => {
-        if(!val) return 'Файл не добавлен';
-        if(path.extname(val.name) !== '.txt') return 'Некорректный формат файла. Выберите документ word (.txt)';
+        if (!val) return 'Файл не добавлен';
+        
+        // ✅ ИСПРАВЛЕНИЕ №1: Чистый нативный JavaScript вместо серверного модуля 'path'
+        const ext = val.name.substring(val.name.lastIndexOf('.')).toLowerCase();
+        if (ext !== '.txt') return 'Некорректный формат файла. Выберите текстовый документ (.txt)';
+        
         return null;
       },
-      officeId: (val) => !!val? null : 'Выберите филиал',
+      officeId: (val) => (val !== undefined && val !== null && !isNaN(val)) ? null : 'Выберите филиал',
     }
   });
+
   const [triggerUpdate, updateResult] = useUpdateBranchOfficeEmployeesMutation();
+
   const onClose = () => {
     form.reset();
     modalProps.onClose();
-  }
+  };
+
   const onSubmit = () => {
-    if(form.validate().hasErrors) return;
+    if (form.validate().hasErrors) return;
     const values = form.getValues();
+    
     triggerUpdate({
       officeId: values.officeId ?? -1,
       file: values.file!
     })
-    .then(({data, error})=>{
-      if(data){
+    .then((res) => {
+      // ✅ ИСПРАВЛЕНИЕ №2: Строгий перехват ответов мутации по стандарту Next.js 15
+      if ('error' in res) {
+        NotificationService.showErrorNotification({
+          message: 'При обновлении списка сотрудников произошла ошибка: ' + ((res.error as any)?.data?.message ?? (res.error as any)?.message ?? '')
+        });
+        return;
+      }
+
+      const data = res.data;
+      if (data) {
         NotificationService.showSuccessNotification({
           title: 'Список пользователей филиала обновлен.',
-          message: <>
-            Добавлено пользователей: {data?.created}.<br />
-            Пользователей активировано: {data?.active} <br />
-            Пользователей уволено: {data?.inactive}
-          </>,
+          message: (
+            <>
+              Добавлено пользователей: {data?.created}.<br />
+              Пользователей активировано: {data?.active} <br />
+              Пользователей уволено: {data?.inactive}
+            </>
+          ),
           autoClose: 10000,
-        })
+        });
         onClose();
-      }else{
-        NotificationService.showErrorNotification({message: 'При обновлении списка сотрудников произошла ошибка ' + (error as any)?.message })
       }
-    })
-  }
+    });
+  };
+
   return (
     <Modal.Root 
       {...modalProps} 
@@ -67,9 +82,9 @@ const UpdateBranchOfficeEmployeesModal = ({...modalProps}: UpdateBranchOfficeEmp
     >
       <Modal.Overlay />
       <Modal.Content miw={500}>
-      <Modal.Header className={commonClasses.modalHeader}>
+        <Modal.Header className={commonClasses.modalHeader}>
           <Modal.Title className={commonClasses.modalTitle}>
-            Добавление нового сотрудника
+            Обновление сотрудников филиала
           </Modal.Title>
           <Modal.CloseButton />
         </Modal.Header>
@@ -84,19 +99,25 @@ const UpdateBranchOfficeEmployeesModal = ({...modalProps}: UpdateBranchOfficeEmp
               unselectable="off"
             />
             <FileInput
-              label="Добавьте файл меню"
-              placeholder={`sample.txt`}
+              label="Добавьте TXT-файл сотрудников"
+              placeholder="sample.txt"
               withAsterisk
               leftSection={<IconFile />}
               accept=".txt"
+              disabled={updateResult.isLoading}
               key={form.key('file')}
               {...form.getInputProps('file')}
             />
-            <Group justify="space-between">
-              <Button variant="outline" onClick={onClose}>
+            <Group justify="space-between" mt="md">
+              <Button variant="outline" onClick={onClose} disabled={updateResult.isLoading}>
                 Отмена
               </Button>
-              <Button onClick={onSubmit}>Создать</Button>
+              <Button 
+                onClick={onSubmit}
+                loading={updateResult.isLoading} // ✅ Блокировка от повторных отправлений файла
+              >
+                Обновить список
+              </Button>
             </Group>
           </Stack>
         </Modal.Body>

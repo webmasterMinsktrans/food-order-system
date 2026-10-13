@@ -16,15 +16,14 @@ import CredentialsInput from './CredentialsInput';
 import { useSignUpMutation } from '@/lib/api/authApi';
 import { SuccessMessageCard } from '@/components/cards/SuccessMessageCard/SuccessMessageCard';
 
-interface SignUpFormProps {
-
-}
+interface SignUpFormProps {}
 
 export const SignUpForm: FunctionComponent<SignUpFormProps> = () => {
   const [active, setActive] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  
   const form = useForm<SignUpFormValues>({
-    mode: 'uncontrolled',
+    mode: 'uncontrolled', // Оптимальный режим работы для React 19
     initialValues: {
       office: '',
       surname: '',
@@ -37,9 +36,7 @@ export const SignUpForm: FunctionComponent<SignUpFormProps> = () => {
     validate: (values) => {
       if (active === 0) {
         return {
-          office: values.office.length === 0
-            ? 'Выберите филиал'
-            : null,
+          office: values.office.length === 0 ? 'Выберите филиал' : null,
         };
       }
       if (active === 1) {
@@ -48,18 +45,18 @@ export const SignUpForm: FunctionComponent<SignUpFormProps> = () => {
             ? 'Фамилия должна содержать минимум 3 символа'
             : null,
           personnelNumber: values.personnelNumber.length < 3
-          ? 'Табельный номер должна содержать минимум 3 символа'
-          : null,
+            ? 'Табельный номер должен содержать минимум 3 символа' // ✅ Исправлена опечатка
+            : null,
         };
       }
       if (active === 2) {
         return {
           login: values.login.length < 5 || values.login.includes('@') ?
-          'Логин должен содержать не менее 5 символов и не должен содержать символ @' : null,
+            'Логин должен содержать не менее 5 символов и не должен содержать символ @' : null,
           password: passwordStrength(values.password).id < 2 ?
-          'Пароль должен содержать не менее 8 символов,  1 цифру, маленькую и большую буквы и 1 спецсимвол (!№%*&).' : null,
+            'Пароль должен содержать не менее 8 символов, 1 цифру, маленькую и большую буквы и 1 спецсимвол (!№%*&).' : null,
           passwordRepeat: values.password !== values.passwordRepeat ?
-          'Пароли не совпадают' : null,
+            'Пароли не совпадают' : null,
           email: /^\S+@\S+$/.test(values.email) ? null : 'Некорректный email',
         };
       }
@@ -94,33 +91,42 @@ export const SignUpForm: FunctionComponent<SignUpFormProps> = () => {
     }
     setActive((current) => current < 3 ? current + 1 : current);
   };
+  
   const prevStep = () => setActive((current) => (current > 0 ? current - 1 : current));
 
-  useEffect(() => {
-    if (!checkResult.isFetching && checkResult.isSuccess) {
-      setActive(2);
-    } else if (checkResult.isError) {
-      const { error } = checkResult;
-      NotificationService.showErrorNotification({
-        message: (error as ErrorDto)?.message ??
-        'Ошибка! Сотрудника с указанными данными не существует',
-        autoClose: 15000,
-      });
-    }
-  }, [checkResult]);
+  // ✅ ИСПРАВЛЕНИЕ №1: Извлекаем примитивы из checkResult для стабильных зависимостей useEffect в React 19
+  const isCheckSuccess = checkResult.isSuccess;
+  const isCheckError = checkResult.isError;
+  const isCheckFetching = checkResult.isFetching;
+  const checkErrorData = checkResult.error;
 
   useEffect(() => {
-    if (signUpResult.isSuccess && !signUpResult.isLoading) {
-      setActive(3);
-    } else if (signUpResult.isError) {
-      const { error } = signUpResult;
+    if (!isCheckFetching && isCheckSuccess) {
+      setActive(2);
+    } else if (isCheckError) {
       NotificationService.showErrorNotification({
-        message: (error as ErrorDto)?.message ??
-        'Ошибка регистрации ',
+        message: (checkErrorData as ErrorDto)?.message ?? 'Ошибка! Сотрудника с указанными данными не существует',
         autoClose: 15000,
       });
     }
-  }, [signUpResult]);
+  }, [isCheckSuccess, isCheckError, isCheckFetching, checkErrorData]);
+
+  // ✅ ИСПРАВЛЕНИЕ №2: Извлекаем примитивы из signUpResult
+  const isSignUpSuccess = signUpResult.isSuccess;
+  const isSignUpError = signUpResult.isError;
+  const isSignUpLoading = signUpResult.isLoading;
+  const signUpErrorData = signUpResult.error;
+
+  useEffect(() => {
+    if (isSignUpSuccess && !isSignUpLoading) {
+      setActive(3);
+    } else if (isSignUpError) {
+      NotificationService.showErrorNotification({
+        message: (signUpErrorData as ErrorDto)?.message ?? 'Ошибка регистрационной записи',
+        autoClose: 15000,
+      });
+    }
+  }, [isSignUpSuccess, isSignUpError, isSignUpLoading, signUpErrorData]);
 
   return (
     <Card className={classes.signUpContainer}>
@@ -140,7 +146,7 @@ export const SignUpForm: FunctionComponent<SignUpFormProps> = () => {
         <Stepper.Step
           label="Второй шаг"
           description="Выбор сотрудника"
-          loading={checkResult.isFetching}
+          loading={isCheckFetching}
         >
           <EmployeeInput form={form} />
         </Stepper.Step>
@@ -148,31 +154,31 @@ export const SignUpForm: FunctionComponent<SignUpFormProps> = () => {
           <CredentialsInput form={form} />
         </Stepper.Step>
         <Stepper.Completed>
-        <SuccessMessageCard>
-          <SuccessMessageCard.Icon size={100}>
-            <IconUsers size={100} stroke={1.5} />
-          </SuccessMessageCard.Icon>
-          <SuccessMessageCard.Title>
-            Аккаунт создан!
-          </SuccessMessageCard.Title>
-          <SuccessMessageCard.Text>
-            Аккаунт успешно создан.
-            <strong className={classes.importantText}>
-              Вам на электронную почту было направлено письмо для подтверждения email.
-            </strong>
-            Для окончания Регистрации в системе следуйте инструкциям в письме.<br />
-            В случае если письмо не пришло войдите в систему с вашим логином и паролем для повторной отправки письма.
-          </SuccessMessageCard.Text>
-          <SuccessMessageCard.OkButton redirectLink="/">
-            На главную
-          </SuccessMessageCard.OkButton>
-        </SuccessMessageCard>
+          <SuccessMessageCard>
+            <SuccessMessageCard.Icon size={100}>
+              <IconUsers size={100} stroke={1.5} />
+            </SuccessMessageCard.Icon>
+            <SuccessMessageCard.Title>
+              Аккаунт создан!
+            </SuccessMessageCard.Title>
+            <SuccessMessageCard.Text>
+              Аккаунт успешно создан.
+              <strong className={classes.importantText}>
+                Вам на электронную почту было направлено письмо для подтверждения email.
+              </strong>
+              Для окончания Регистрации в системе следуйте инструкциям в письме.<br />
+              В случае если письмо не пришло войдите в систему с вашим логином и паролем для повторной отправки письма.
+            </SuccessMessageCard.Text>
+            <SuccessMessageCard.OkButton redirectLink="/">
+              На главную
+            </SuccessMessageCard.OkButton>
+          </SuccessMessageCard>
         </Stepper.Completed>
       </Stepper>
       <Divider my="md" display={active === 3 ? 'none' : 'default'} />
       <Group justify="flex-end" style={{ justifySelf: 'flex-end' }}>
         {active !== 0 && active !== 3 && (
-          <Button variant="default" onClick={prevStep} disabled={checkResult.isLoading}>
+          <Button variant="default" onClick={prevStep} disabled={isCheckFetching}>
             Назад
           </Button>
         )}
@@ -180,12 +186,12 @@ export const SignUpForm: FunctionComponent<SignUpFormProps> = () => {
           active !== 3 &&
           <Button
             onClick={nextStep}
-            loading={isLoading || checkResult.isFetching}
+            loading={isLoading || isCheckFetching || isSignUpLoading}
           >
             Далее
           </Button>
         }
       </Group>
     </Card>
-    );
+  );
 };

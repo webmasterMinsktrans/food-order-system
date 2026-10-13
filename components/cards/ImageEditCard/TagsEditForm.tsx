@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Button, Group, LoadingOverlay, Overlay, Stack, TextInput, Title } from "@mantine/core";
+import { ActionIcon, Button, Group, LoadingOverlay, Stack, TextInput, Title } from "@mantine/core";
 import { IconCancel, IconDeviceFloppy, IconTrash } from "@tabler/icons-react";
 import { useForm } from "@mantine/form";
 import { randomId } from "@mantine/hooks";
@@ -22,7 +22,7 @@ interface TagsEditFormProps {
 
 const TagsEditForm = ({imageId, tags = [], dirtyRef, onCloseRef}: TagsEditFormProps) => {
   const form = useForm({
-    mode: 'controlled',
+    mode: 'controlled', // Гарантирует корректную работу реактивности полей в React 19
     initialValues:{
       tags: tags.map((tag) => ({
         id: `${tag.id}`,
@@ -39,11 +39,17 @@ const TagsEditForm = ({imageId, tags = [], dirtyRef, onCloseRef}: TagsEditFormPr
       }
     }
   });
-  const [editTags, editResults]= useUpdateImageTagsMutation();
+  
+  const [editTags, editResults] = useUpdateImageTagsMutation();
   const dispatch = useAppDispatch();
-  useEffect(()=>{
-    if(dirtyRef) dirtyRef.current = form.isDirty;
-  },[dirtyRef]);
+
+  // ✅ ИСПРАВЛЕНИЕ №1: Выносим булево значение isDirty в константу для корректной зависимости в React 19
+  const isFormDirty = form.isDirty();
+
+  useEffect(() => {
+    if (dirtyRef) dirtyRef.current = isFormDirty;
+  }, [dirtyRef, isFormDirty]);
+
   const insertTag = () => {
     form.insertListItem('tags', {
       id: randomId(),
@@ -53,6 +59,7 @@ const TagsEditForm = ({imageId, tags = [], dirtyRef, onCloseRef}: TagsEditFormPr
       type: 'new',
     });
   };
+
   const removeTag = (index: number) =>  {
     const tag = form.getValues()?.tags?.at(index);
     if(tag?.type === 'old'){
@@ -65,34 +72,41 @@ const TagsEditForm = ({imageId, tags = [], dirtyRef, onCloseRef}: TagsEditFormPr
     }
   };
 
-  const saveEditedTags = () =>{
+  const saveEditedTags = () => {
     if(form.validate().hasErrors) return;
     const touched = form.getTouched();
-    const tagValues = form.getValues().tags.filter((tag, index) =>{
+    const tagValues = form.getValues().tags.filter((tag, index) => {
       return tag.type === 'new' ||
         tag.action === 'delete' ||
         touched[`tags.${index}.tagName`] ||
         touched[`tags.${index}.canteenId`] 
-    } )
-    .map(tag => tag.type === 'old' && tag.action ==='none'? {...tag, action: 'edit'} : tag)
-    editTags({id:imageId, body: {tags: tagValues}}).then(res => {
-      if(res.error) 
-        NotificationService.showErrorNotification({title:'Ошибка обновления','message': (res.error as any)?.message ?? res.error})
-      else{
-        form.setInitialValues(form.getValues());
-        form.resetTouched();
-        form.resetDirty();
-        if(onCloseRef)
-          onCloseRef.current =() => dispatch(baseApiWithAuth.util.invalidateTags(['Images'])); 
+    })
+    .map(tag => tag.type === 'old' && tag.action === 'none' ? {...tag, action: 'edit'} : tag);
+
+    editTags({id: imageId, body: {tags: tagValues}}).then(res => {
+      // ✅ ИСПРАВЛЕНИЕ №2: Строгий и безопасный разбор ответа мутации по стандартам Next.js 15
+      if ('error' in res) {
+        NotificationService.showErrorNotification({
+          title: 'Ошибка обновления',
+          message: (res.error as any)?.data?.message ?? (res.error as any)?.message ?? 'Ошибка сервера'
+        });
+        return;
       }
+
+      form.setInitialValues(form.getValues());
+      form.resetTouched();
+      form.resetDirty();
+      if(onCloseRef)
+        onCloseRef.current = () => dispatch(baseApiWithAuth.util.invalidateTags(['Images'])); 
     });
   }
+
   return (
     <Stack className={classes.tagsInput}>
       <LoadingOverlay visible={editResults.isLoading} />
       <Title order={4}>Теги:</Title> 
       {form.getValues().tags?.map((item, index) => (
-        item.action !=='delete' &&  
+        item.action !== 'delete' &&  
         <Group 
           key={item.id}
           className={classes.tagField}
@@ -114,7 +128,7 @@ const TagsEditForm = ({imageId, tags = [], dirtyRef, onCloseRef}: TagsEditFormPr
             size={24} 
             color='primary.4' 
             variant='transparent'
-            onClick={()=> removeTag(index)}
+            onClick={() => removeTag(index)}
           >
             <IconTrash />
           </ActionIcon>
@@ -129,12 +143,12 @@ const TagsEditForm = ({imageId, tags = [], dirtyRef, onCloseRef}: TagsEditFormPr
       >
         +
       </Button>
-      <Group className={classes.buttonsBlock} display={form.isDirty() ? undefined :'none'}>
+      <Group className={classes.buttonsBlock} display={isFormDirty ? undefined : 'none'}>
         <ActionIcon
           size={32}
           color='yellow.8'
           variant='outline'
-          onClick={()=>form.reset()}
+          onClick={() => form.reset()}
         >
           <IconCancel />
         </ActionIcon>
@@ -142,13 +156,12 @@ const TagsEditForm = ({imageId, tags = [], dirtyRef, onCloseRef}: TagsEditFormPr
           size={32}
           color={'green.8'} 
           onClick={saveEditedTags}
+          loading={editResults.isLoading} // ✅ Предотвращает дублирующие отправки во время сетевого запроса
         >
           <IconDeviceFloppy />
         </ActionIcon>
-
       </Group>
     </Stack>  
-    
   );
 };
 

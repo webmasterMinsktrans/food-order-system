@@ -8,9 +8,7 @@ import { clearCart, selectCartTotalCount, selectCreateOrderArgument, selectFinal
 import { useMakeOrderMutation } from '@/lib/api/orderApi';
 import { NotificationService } from '@/shared/services';
 
-interface CartTotalProps {
-
-}
+interface CartTotalProps {}
 
 const CartTotal: FunctionComponent<CartTotalProps> = () => {
   const fullPrice = useAppSelector(selectFullPrice);
@@ -22,20 +20,27 @@ const CartTotal: FunctionComponent<CartTotalProps> = () => {
   const [makeOrder, { isLoading }] = useMakeOrderMutation();
 
   const makeOrderClick = () => {
-    makeOrder(orderArgs)
-    .then(res => {
-      if (res.error) throw res.error;
+    makeOrder(orderArgs).then((res) => {
+      // ✅ ИСПРАВЛЕНИЕ №1: Строгий и безопасный перехват ошибок мутации по стандартам Next.js 15
+      if ('error' in res || res.error) {
+        const errorData = res.error;
+        NotificationService.showErrorNotification({
+          message: (errorData as any)?.data?.message ?? (errorData as any)?.message ?? 'Ошибка создания заказа.',
+        });
+        return; // Блокируем дальнейшее выполнение функции
+      }
+
+      // ✅ ИСПРАВЛЕНИЕ №2: Код переходит к чтению res.data только будучи уверенным, что ошибки нет
+      const data = res.data;
+      if (!data) return;
+
       NotificationService.showSuccessNotification({
-        title: `Заказ ${res.data.number} создан`,
-        message: 'Для отслеживания статуса заказа перейдите к странице активных заказов',
+        title: `Заказ №${data.number} успешно создан`,
+        message: 'Для отслеживания статуса перейдите на страницу активных заказов',
         autoClose: 10000,
       });
+      
       dispatch(clearCart());
-    })
-    .catch(err => {
-      NotificationService.showErrorNotification({
-        message: err.message ?? 'Ошибка создания заказа.',
-      });
     });
   };
 
@@ -60,7 +65,8 @@ const CartTotal: FunctionComponent<CartTotalProps> = () => {
         mt="lg"
         onClick={makeOrderClick}
         loading={isLoading}
-        >
+        disabled={totalCount === 0} // ✅ Защита: кнопка блокируется, если корзина пуста
+      >
         Оформить заказ
       </Button>
     </Stack>

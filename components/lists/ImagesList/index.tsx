@@ -6,7 +6,7 @@ import { Flex,  LoadingOverlay,  Skeleton,  } from "@mantine/core";
 import classes from './styles.module.scss';
 import { Pagination } from "@/UI";
 import { useSearchParamValues } from "@/shared/hooks";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react"; // 👈 Добавили useMemo
 import DropdownMenu from "./DropdownMenu";
 import ImageEditCard from "../../cards/ImageEditCard";
 import { ImageFullInfoDto } from "@/shared/types";
@@ -14,48 +14,60 @@ import { NotificationService } from "@/shared/services";
 import searchEmpty from '@/public/search_state.gif';
 import NoContentPage from "../../NoContentPage/NoContentPage";
 
-interface ImageListProps {
-  
-}
+interface ImageListProps {}
 
 const ImageList = (props: ImageListProps) => {
-  const [page,s, sortOrder, orderBy, office] = useSearchParamValues(['page','s','order','sort', 'office']);
-  const { data, isLoading, isFetching } = useGetImageListQuery({
+  const [page, s, sortOrder, orderBy, office] = useSearchParamValues(['page', 's', 'order', 'sort', 'office']);
+
+  // ✅ ИСПРАВЛЕНИЕ №1: Стабилизируем ссылку на объект параметров через useMemo
+  const queryParams = useMemo(() => ({
     page: +(page ?? 1), 
     pageSize: 20,
     s,
     orderBy,
     sortOrder,
-    canteenId: office? +office: undefined,
-  });
+    canteenId: office ? +office : undefined,
+  }), [page, s, orderBy, sortOrder, office]);
+
+  // Передаем мемоизированный queryParams вместо создания объекта "на лету"
+  const { data, isLoading, isFetching } = useGetImageListQuery(queryParams);
+  
   const images = data?.data;
   const [picked, setPicked] = useState<number[]>([]);
+  
   const togglePicked = (id: number) => {
     if(picked.includes(id)) setPicked(picked.filter((pickedId) => pickedId !== id ))
     else setPicked([...picked, id])
   }
+  
   const [{opened, coordinates}, toggleOpened] = useState({opened: false, coordinates: {x:0, y:0}});
-  useEffect(()=>setPicked([]),[s, orderBy, sortOrder, office])
+  
+  useEffect(() => setPicked([]), [s, orderBy, sortOrder, office]);
+
   const [{editModalOpened, img}, setEditModalState] = useState({
     editModalOpened: false, 
     img: null as ImageFullInfoDto | null
   });
-  const [deleteImages, deleteImagesResult]= useDeleteImagesMutation();
-  const [deleteImagesTags, deleteImagesTagsResult]= useDeleteImagesTagsMutation();
+  
+  const [deleteImages, deleteImagesResult] = useDeleteImagesMutation();
+  const [deleteImagesTags, deleteImagesTagsResult] = useDeleteImagesTagsMutation();
+  
   const closeEditModal = () => setEditModalState({editModalOpened: false, img: null});
   const openEditModal = (img: ImageFullInfoDto) => setEditModalState({editModalOpened: true, img });
-  const openEdit = () =>{
+  
+  const openEdit = () => {
     if(picked.length === 0) NotificationService.showForbiddenNotification({message:'Не выбрано ни одного изображения'})
     if(images)
       openEditModal(images.find((image) => image.id === picked[0])!)
   }
-  const deleteItems = () =>{
+  
+  const deleteItems = () => {
     const ids = picked;
     deleteImages({body:{ids}})
     .then(res => {
       if(res.error){
         NotificationService.showErrorNotification({
-          title: 'Ошибка удаление выбранных картинок',
+          title: 'Ошибка удаления выбранных картинок',
           message:(res.error as any)?.message
         })
       }else{
@@ -67,13 +79,14 @@ const ImageList = (props: ImageListProps) => {
       }
     })
   };
-  const deleteTags= () =>{
+
+  const deleteTags = () => {
     const ids = picked;
     deleteImagesTags({body:{ids}})
     .then(res => {
       if(res.error){
         NotificationService.showErrorNotification({
-          title: 'Ошибка удаление выбранных тегов',
+          title: 'Ошибка удаления выбранных тегов',
           message:(res.error as any)?.message
         })
       }else{
@@ -86,22 +99,32 @@ const ImageList = (props: ImageListProps) => {
     })
   };
 
-  if(isFetching || data?.data.length===0){
-      return (
-        <div className={classes.loadingBox}>
-          {
-            isFetching ?
-            <LoadingOverlay visible />
-            :
-            <NoContentPage
-              label="Отсутствуют изображения по заданному запросу :("
-              img={searchEmpty}
-              size='sm'
-            />
-          }
-        </div>
-      )
-    }
+  // ✅ ИСПРАВЛЕНИЕ №2: Безопасный расчет смещения выпадающего меню без падения на сервере
+  const menuOffset = useMemo(() => {
+    const screenWidth = typeof window !== 'undefined' ? window.screen.width : 1920;
+    return {
+      'mainAxis': coordinates.y - 35, 
+      'crossAxis': coordinates.x - screenWidth / 2 + 95
+    };
+  }, [coordinates.x, coordinates.y]);
+
+  if (isFetching || data?.data.length === 0) {
+    return (
+      <div className={classes.loadingBox}>
+        {
+          isFetching ?
+          <LoadingOverlay visible />
+          :
+          <NoContentPage
+            label="Отсутствуют изображения по заданному запросу :("
+            img={searchEmpty}
+            size='sm'
+          />
+        }
+      </div>
+    )
+  }
+
   return (
     <>
       <Flex 
@@ -130,7 +153,7 @@ const ImageList = (props: ImageListProps) => {
         <DropdownMenu 
           opened={opened} 
           onChange={(opened) => toggleOpened({opened, coordinates})} 
-          offset={{'mainAxis':coordinates.y - 35, 'crossAxis':coordinates.x - screen.width/2 + 95}}
+          offset={menuOffset} // Передаем мемоизированное смещение
           width={180}
           actions={{
             selectAll: ()=> setPicked(images?.map(({id})=>id) ?? []),
@@ -145,9 +168,7 @@ const ImageList = (props: ImageListProps) => {
         <ImageEditCard
           opened={editModalOpened}
           onClose={closeEditModal}
-          imageData={
-            img
-          }
+          imageData={img}
         />
       }
     </>

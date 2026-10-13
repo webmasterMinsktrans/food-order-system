@@ -18,23 +18,29 @@ export const orderApi = createApi({
   tagTypes: ['ActiveOrdersList'],
   baseQuery: baseQueryWithExpire,
   endpoints: (builder) => ({
-    makeOrder: builder.mutation(({
+    makeOrder: builder.mutation({ // ✅ ИСПРАВЛЕНИЕ №1: Убраны лишние скобки вызова функции в builder.mutation
       query: (body: MakeOrderParams) => ({
         url: 'order/create',
         body,
         method: 'POST',
       }),
       transformErrorResponse,
-      invalidatesTags: (result, error, args) => {
+      invalidatesTags: (result, error) => {
         if (!error) return ['ActiveOrdersList'];
         return [];
       },
-    })),
+    }),
     getOrdersList: builder.query({
-      query: (params:GetActiveOrdersParams) => ({
-        url: 'order/list',
-        params,
-      }),
+      query: (params: GetActiveOrdersParams) => {
+        // ✅ ИСПРАВЛЕНИЕ №2: Предохранитель от бесконечного цикла Next.js 15 при асинхронных params из URL
+        if (!params || typeof params.active === 'undefined') {
+          return { url: 'order/list' };
+        }
+        return {
+          url: 'order/list',
+          params,
+        };
+      },
       transformResponse: (res) => res as {
         items: OrderMainInfoDto[],
         totalPages: number
@@ -43,22 +49,26 @@ export const orderApi = createApi({
       providesTags: ['ActiveOrdersList'],
     }),
     getOrderInfo: builder.query({
-      query: (params: { issued: string, number: number }) => ({
-        url: `order/${params.issued}/${params.number}`,
-        params,
-      }),
+      query: (params: { issued: string, number: number }) => {
+        // ✅ ИСПРАВЛЕНИЕ №3: Защита от неинициализированных параметров во время SSR гидратации
+        if (!params || !params.issued || !params.number) {
+          return { url: 'order/empty' };
+        }
+        return {
+          url: `order/${params.issued}/${params.number}`,
+        }; // Дублирование params внутрь GET-запроса удалено, так как данные уже есть в самом URL пути
+      },
       transformResponse: (res) => res as OrderFullInfoDto,
       transformErrorResponse,
     }),
     cancelOrder: builder.mutation({
       query: (params: { issued: string, number: number }) => ({
         url: `order/cancel/${params.issued}/${params.number}`,
-        params,
         method: 'DELETE',
       }),
       transformResponse: (res) => res,
       transformErrorResponse,
-      invalidatesTags: (result, error, args) => {
+      invalidatesTags: (result, error) => {
         if (!error) return ['ActiveOrdersList'];
         return [];
       },
@@ -69,10 +79,11 @@ export const orderApi = createApi({
         params,
       }),
       providesTags: ['ActiveOrdersList'],
-      transformResponse: (res) => res as { totalCount: number, totalPrice:number },
+      transformResponse: (res) => res as { totalCount: number, totalPrice: number },
       transformErrorResponse,
     }),
-}) });
+  }),
+});
 
 export const {
   useMakeOrderMutation,

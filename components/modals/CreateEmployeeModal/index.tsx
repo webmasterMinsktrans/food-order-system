@@ -1,17 +1,17 @@
+'use client';
+
 import { Button, Checkbox, Group, LoadingOverlay, Modal, ModalProps, Stack, TextInput } from "@mantine/core";
 import { useForm } from "@mantine/form";
-import {  useCreateEmployeeMutation } from "@/lib/api/adminApi";
+import { useCreateEmployeeMutation } from "@/lib/api/adminApi";
 import { NotificationService } from "@/shared/services";
 import OfficeSelect from "../../OfficeSelect/OfficeSelect";
 import commonClasses from '../styles.module.scss';
 
-interface CreateEmployeeModalProps extends ModalProps {
-  
-}
+interface CreateEmployeeModalProps extends ModalProps {}
 
-const CreateEmployeeModal = ({...modalProps}: CreateEmployeeModalProps) => {
+const CreateEmployeeModal = ({ ...modalProps }: CreateEmployeeModalProps) => {
   const form = useForm({
-    mode: 'uncontrolled',
+    mode: 'uncontrolled', // Оптимальный режим для React 19
     initialValues: {
       name: '',
       surname: '',
@@ -20,34 +20,49 @@ const CreateEmployeeModal = ({...modalProps}: CreateEmployeeModalProps) => {
       active: true,
       officeId: '',
     },
-    validate:{
-      name: (val) => val.length >=2 ? null : 'Минимальная длина 2 символа',
-      surname: (val) => val.length >=2 ? null : 'Минимальная длина 2 символа',
-      patronymic: (val) => val.length >=2 ? null : 'Минимальная длина 2 символа',
+    validate: {
+      name: (val) => val.length >= 2 ? null : 'Минимальная длина 2 символа',
+      surname: (val) => val.length >= 2 ? null : 'Минимальная длина 2 символа',
+      patronymic: (val) => val.length >= 2 ? null : 'Минимальная длина 2 символа',
       personnelNumber: (val) => !val ? 'Установите табельный номер' : null,
       officeId: (val) => !val ? 'Установите филиал' : null
     }
   });
+
   const [triggerCreate, createResult] = useCreateEmployeeMutation();
-  const onClose = () => {form.reset(); modalProps.onClose()};
-  const onCancel = () =>{
+
+  const onClose = () => {
+    form.reset(); 
+    modalProps.onClose();
+  };
+
+  const onCancel = () => {
     onClose();
-  }
-  const onSubmit = () =>{
-   if(form.validate().hasErrors) return;
-   const values = form.getValues();
-   triggerCreate({
-    ...values,
-     officeId: +values.officeId
-   }).then(({data, error}) =>{
-    if(data){
-      NotificationService.showSuccessNotification({message: `Сотрудник с id ${data} создан`})
-      onClose();
-    }else{
-      NotificationService.showErrorNotification({message: 'При создании сотрудника произошла непредвиденная ошибка ' + (error as any)?.message })
-    }
-   })
-  }
+  };
+
+  const onSubmit = () => {
+    if (form.validate().hasErrors) return;
+    const values = form.getValues();
+    
+    triggerCreate({
+      ...values,
+      officeId: +values.officeId
+    }).then((res) => {
+      // ✅ ИСПРАВЛЕНИЕ №1: Безопасный и строгий перехват ответов мутации по стандартам Next.js 15
+      if ('error' in res) {
+        NotificationService.showErrorNotification({
+          message: 'При создании сотрудника произошла непредвиденная ошибка: ' + ((res.error as any)?.data?.message ?? (res.error as any)?.message ?? '')
+        });
+        return;
+      }
+
+      if (res.data) {
+        NotificationService.showSuccessNotification({ message: `Сотрудник с id ${res.data} создан` });
+        onClose();
+      }
+    });
+  };
+
   return (
     <Modal.Root 
       {...modalProps} 
@@ -57,7 +72,7 @@ const CreateEmployeeModal = ({...modalProps}: CreateEmployeeModalProps) => {
     >
       <Modal.Overlay />
       <Modal.Content miw={500}>
-      <Modal.Header className={commonClasses.modalHeader}>
+        <Modal.Header className={commonClasses.modalHeader}>
           <Modal.Title className={commonClasses.modalTitle}>
             Добавление нового сотрудника
           </Modal.Title>
@@ -100,13 +115,19 @@ const CreateEmployeeModal = ({...modalProps}: CreateEmployeeModalProps) => {
               label={'Активен'}
               key={form.key('active')}
               {...form.getInputProps('active')}
-              defaultChecked={true}
+              // ✅ ИСПРАВЛЕНИЕ №2: Удален проп defaultChecked. 
+              // В режиме uncontrolled начальное состояние полностью берется из initialValues.active (true).
             />
-            <Group justify="space-between">
+            <Group justify="space-between" mt="md">
               <Button variant="outline" onClick={onCancel}>
                 Отмена
               </Button>
-              <Button onClick={onSubmit}>Создать</Button>
+              <Button 
+                onClick={onSubmit}
+                loading={createResult.isLoading} // ✅ Блокировка кнопки от повторных кликов при отправке
+              >
+                Создать
+              </Button>
             </Group>
           </Stack>
         </Modal.Body>

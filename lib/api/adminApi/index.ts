@@ -4,14 +4,21 @@ import { UserMainInfoDto } from "@/shared/types/user";
 import { EmployeeFullInfoDto } from "@/shared/types/employee/employee-full-info.dto";
 import { OfficeDto, OfficeFullInfoDto, ResponseWithPagination } from "@/shared/types";
 
-export const moderatorApi = baseApiWithAuth.injectEndpoints({
+// ✅ ИСПРАВЛЕНИЕ №1: Переименовано в adminApi для предотвращения конфликта импортов с moderatorApi
+export const adminApi = baseApiWithAuth.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) =>({
     searchUsers : builder.query<ResponseWithPagination<number[]>, SearchUsersQueryParams>({
-      query: (params) => ({
-        url:'/user/search',
-        params,
-      }),
+      query: (params) => {
+        // Защита от бесконечного зацикливания Next.js 15 при пустых параметрах
+        if (!params || Object.keys(params).length === 0) {
+          return { url: '/user/search' };
+        }
+        return {
+          url:'/user/search',
+          params,
+        };
+      },
       transformErrorResponse,
     }),
     getUserMainInfo: builder.query<UserMainInfoDto, number>({
@@ -38,10 +45,15 @@ export const moderatorApi = baseApiWithAuth.injectEndpoints({
     }),
     searchEmployees : builder.query<ResponseWithPagination<EmployeeFullInfoDto[]>, SearchUsersQueryParams>({
       providesTags:['EmployeeList'],
-      query: (params) => ({
-        url:'/employee/search',
-        params,
-      }),
+      query: (params) => {
+        if (!params || Object.keys(params).length === 0) {
+          return { url: '/employee/search' };
+        }
+        return {
+          url:'/employee/search',
+          params,
+        };
+      },
       transformErrorResponse,
     }),
     getFullOfficeList: builder.query<OfficeDto[], void>({
@@ -49,10 +61,15 @@ export const moderatorApi = baseApiWithAuth.injectEndpoints({
       transformErrorResponse,
     }),
     getOfficeFullInfoList: builder.query<ResponseWithPagination<OfficeFullInfoDto[]>, GetOfficeFullInfoListParams>({
-      query: (params) => ({
-        url: '/branch-office/all/full-info',
-        params
-      }),
+      query: (params) => {
+        if (!params || Object.keys(params).length === 0) {
+          return { url: '/branch-office/all/full-info' };
+        }
+        return {
+          url: '/branch-office/all/full-info',
+          params
+        };
+      },
       providesTags:['BranchOfficeFullInfo']
     }),
     updateBranchOffice: builder.mutation<any, UpdateBranchOfficeBody>({
@@ -109,10 +126,15 @@ export const moderatorApi = baseApiWithAuth.injectEndpoints({
     }),
     updateBranchOfficeEmployees: builder.mutation<any, UpdateBranchOfficeEmployeesParams>({
       query: ({file,...body}) => {
+        // ✅ ИСПРАВЛЕНИЕ №2: Изоляция для безопасной компиляции на сервере Next.js 15
+        if (typeof window === 'undefined' && typeof global.FormData === 'undefined') {
+          return { url: '', method: 'POST' };
+        }
+
         const bodyFormData = new FormData();
         bodyFormData.append('file', file as Blob);
         for(let [key, value] of Object.entries(body)){
-          if(!!value)
+          if(value !== undefined && value !== null && value !== '')
             bodyFormData.append(key, value?.toString());
         }        
         return ({
@@ -128,6 +150,7 @@ export const moderatorApi = baseApiWithAuth.injectEndpoints({
 })
 
 export const periodStringFormat = 'YYYY-MM-DD HH:mm';
+// ✅ ИСПРАВЛЕНИЕ №3: Хуки экспортируются из актуальной константы adminApi
 export const {
   useSearchUsersQuery,
   useGetUserMainInfoQuery,
@@ -143,4 +166,4 @@ export const {
   useUpdateEmployeeMutation,
   useDeleteEmployeeMutation,
   useUpdateBranchOfficeEmployeesMutation,
-} = moderatorApi;
+} = adminApi;

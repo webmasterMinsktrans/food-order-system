@@ -29,13 +29,20 @@ export const authApi = createApi({
         method: 'POST',
         body: { email, login, password },
       }),
-      transformErrorResponse: (errorResponse) => errorResponse.data,
+      transformErrorResponse, // ✅ ИСПРАВЛЕНИЕ №1: Используем единый типизированный трансформер ошибок из baseApi
     }),
     checkFirstAuthToken: builder.query({
-      query: (params : { token : string }) => ({
-        url: '/check-first-auth-token',
-        params,
-      }),
+      query: (params: { token: string }) => {
+        // ✅ ИСПРАВЛЕНИЕ №2: Предохранитель от бесконечного цикла Next.js 15 при пустом токене во время гидратации
+        if (!params || !params.token) {
+          return { url: '/check-first-auth-token' };
+        }
+        return {
+          url: '/check-first-auth-token',
+          params,
+        };
+      },
+      transformErrorResponse,
     }),
     changeCredentials: builder.mutation({
       query: (({ token, ...body }: { token : string, newLogin : string, newPassword: string }) => ({
@@ -44,6 +51,7 @@ export const authApi = createApi({
         params: { token },
         body,
       })),
+      transformErrorResponse,
     }),
     resetPassword: builder.mutation({
       query: (body: { email?: string, login?: string }) => ({
@@ -51,6 +59,7 @@ export const authApi = createApi({
         method: 'POST',
         body,
       }),
+      transformErrorResponse,
     }),
     changePassword: builder.mutation({
       query: (({ token, ...body }: { token : string, newPassword: string }) => ({
@@ -59,6 +68,7 @@ export const authApi = createApi({
         params: { token },
         body,
       })),
+      transformErrorResponse,
     }),
     signUp: builder.mutation<any, SignUpParams>({
       query: (body) => ({

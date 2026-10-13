@@ -1,4 +1,3 @@
-import dayjs from "dayjs";
 import { OfficeDto } from "../../../shared/types";
 
 export type CreateMenuFromDocxDto = {
@@ -6,19 +5,24 @@ export type CreateMenuFromDocxDto = {
   providingCanteenId: string,
   servedOffices: string[],
   name?: string,
-  relevantFrom: dayjs.Dayjs | null,
-  expire:  dayjs.Dayjs | null,
+  // ✅ ИСПРАВЛЕНИЕ №1: Заменено на string / null. 
+  // На сервере Next.js 15 типы dayjs вызывают конфликты при передаче FormData
+  relevantFrom?: string | null,
+  expire?: string | null,
 }
+
 export type SearchImageTagDto = {
   searchString?: string,
   page?: number,
   pageSize?: number,
 }
+
 export type GetMenuListParams = {
   page?: number,
   pageSize?: number,
   destinationOfficeId: number;
 }
+
 export type UploadImagesDto = {
   files: File[],
   tags: CreateImageTagDto[],
@@ -30,15 +34,19 @@ export type ExportOrdersDocxDto = {
   periodEnd: string,
   deliveryDestinationId: string,
 }
+
 export type SearchOrdersParams = {
-  periodStart?: Date;
-  periodEnd?: Date;
+  // ✅ ИСПРАВЛЕНИЕ №2: Изменено на string, так как в роутинге Next.js 15
+  // параметры из URL (searchParams) прилетают в виде строк, которые мы форматируем перед запросом
+  periodStart?: string;
+  periodEnd?: string;
   deliveryDestinationId?: string;
   page?: number;
   pageSize?: number;
   sortOrder?: string;
   orderBy?: string;
 }
+
 export type SearchOrderItemDto = {
   id: number;
   number: number;
@@ -53,15 +61,17 @@ export type SearchOrderItemDto = {
   clientName: string;
   clientPersonnelNumber: string;
 }
-export type CreateImageTagDto ={
+
+export type CreateImageTagDto = {
   tagName: string;
   officeId?: number;
 }
+
 export type UpdateMenuParams = {
-  id:number,
-  body:{
-    expire?:Date,
-    relevantFrom?:Date,
+  id: number,
+  body: {
+    expire?: Date,
+    relevantFrom?: Date,
   }
 }
 
@@ -73,9 +83,10 @@ export type SearchImageParams = {
   sortOrder?: string;
   orderBy?: string;
 }
+
 export type UpdateImageTagsParams = {
-   id:number,
-  body:{
+  id: number,
+  body: {
     tags: Array<{
       id: string;
       tagName: string;
@@ -85,8 +96,9 @@ export type UpdateImageTagsParams = {
     }>
   }
 }
+
 export type DeleteImagesParams = {
-  body:{
-    ids:number[],
+  body: {
+    ids: number[],
   }
 }
