@@ -1,6 +1,6 @@
 'use client';
 
-import { FunctionComponent, useEffect, useMemo } from 'react';
+import { FunctionComponent, useEffect, useMemo, useState } from 'react'; // 👈 Вернули useState
 import { NoContentPage, OrderList } from '@/components';
 import { useSearchParamValue, useUpdatePageURL } from '@/shared/hooks';
 import noOrdersImage from '@/public/204Order.png';
@@ -13,26 +13,35 @@ const ActiveOrders : FunctionComponent = () => {
   const pageSize = 2;
   const { updateURL } = useUpdatePageURL();
 
-  const currentPage = pageFromUrl ?? 1;
+  // ✅ ИСПРАВЛЕНИЕ №1: Базируем пагинацию на локальном стейте-числе.
+  // Это гарантирует 100% стабильность для RTK Query, так как у числа нет скрытых ссылок в памяти.
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
+  // Синхронизируем страницу из URL в стейт только тогда, когда URL реально изменился
+  useEffect(() => {
+    if (pageFromUrl && pageFromUrl !== currentPage) {
+      setCurrentPage(pageFromUrl);
+    }
+  }, [pageFromUrl]);
+
+  // ✅ ИСПРАВЛЕНИЕ №2: Мемоизируем объект строго от примитивного числа currentPage
   const queryParams = useMemo(() => ({
     page: currentPage,
     pageSize,
     active: true
   }), [currentPage, pageSize]);
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Добавляем флаг skip. 
-  // Блокирует сетевую активность Node.js на этапе SSR до полной инициализации роутера в браузере.
-  const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
-    skip: typeof window === 'undefined'
-  });
+  // Отправляем запрос. Убираем 'skip', чтобы клиент сразу начал стягивать данные
+  const { data, isFetching, error } = useGetOrdersListQuery(queryParams);
 
   const totalPages = data?.totalPages;
   const itemsLength = data?.items?.length;
 
+  // Автоматический откат страницы, если все элементы на ней были удалены/отменены
   useEffect(() => {
     if (totalPages && totalPages !== 0 && itemsLength === 0 && currentPage > totalPages) {
       updateURL(['page'], [totalPages.toString()]);
+      setCurrentPage(totalPages);
     }
   }, [totalPages, itemsLength, currentPage, updateURL]);
 
@@ -44,15 +53,11 @@ const ActiveOrders : FunctionComponent = () => {
     );
   }
 
-  // ✅ ИСПРАВЛЕНИЕ №2: Условие показа лоадера теперь объединяет статус сетевой загрузки 
-  // и серверную проверку. Это гарантирует, что и сервер, и клиент при первой миллисекунде 
-  // отрисуют абсолютно идентичную структуру, полностью исключая Hydration Mismatch.
-  const shouldShowLoader = isFetching || !data || typeof window === 'undefined';
-
-  if (shouldShowLoader) {
+  // ✅ ИСПРАВЛЕНИЕ №3: Лоадер должен гореть ТОЛЬКО тогда, когда идет реальная сетевая загрузка (isFetching) 
+  // И при этом у нас ЕЩЕ НЕТ никаких старых закэшированных данных (!data).
+  // Это убирает вечное залипание спиннера при инициализации страниц в Next.js 15.
+  if (isFetching && !data) {
     return (
-      // ✅ ИСПРАВЛЕНИЕ №3: Заменяем локальный scss-класс на стабильные инлайн-стили.
-      // Это страхует компонент LoadingOverlay от каскадных падений из-за задержки инициализации модулей CSS.
       <div style={{ position: 'relative', minHeight: '200px', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <LoadingOverlay visible overlayProps={{ blur: 1 }} />
       </div>
@@ -62,7 +67,7 @@ const ActiveOrders : FunctionComponent = () => {
   return (
     <>
       {
-        data.totalPages === 0
+        !data || data.totalPages === 0
         ?
           <NoContentPage
             buttonLabel="В меню"

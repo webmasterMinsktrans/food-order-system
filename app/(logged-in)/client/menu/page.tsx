@@ -16,14 +16,10 @@ import { useSessionStorage } from '@mantine/hooks';
 const Menu : FunctionComponent = () => {
   const pageSize = CookieService.getDefaultMenuPageSize();
   
-  // ✅ ИСПРАВЛЕНИЕ №1: Выставляем getInitialValueInEffect: true.
-  // Это принудительно заставляет хук брать дефолтное значение 1 во время SSR на сервере,
-  // а реальные данные из sessionStorage подгружать только на клиенте в useEffect.
-  // Это полностью страхует компонент пагинации от Hydration Mismatch.
   const [pageCount, setPageCount] = useSessionStorage({
     key: 'menu-total-pages',
     defaultValue: 1,
-    getInitialValueInEffect: true, 
+    getInitialValueInEffect: true, // Защита гидратации пагинации при первом входе
   });
   
   const page = useSearchParamValue<number>('page');
@@ -31,17 +27,24 @@ const Menu : FunctionComponent = () => {
   const categoryId = useSearchParamValue<string>('category');
   const destination = useAppSelector(selectDeliveryDestination);
 
-  // Стабилизируем ссылку на объект параметров через useMemo
+  // ✅ ИСПРАВЛЕНИЕ №1: Жестко контролируем тип productType.
+  // Если роутер Next.js 15 при клике передал массив или объект, 
+  // мы принудительно извлекаем чистую строку, защищая useMemo от ссылочного взрыва.
+  const cleanType = useMemo(() => {
+    if (!type) return undefined;
+    if (Array.isArray(type)) return type[0]?.toString() || undefined;
+    if (type === 'undefined' || type === '') return undefined;
+    return type.toString();
+  }, [type]);
+
   const queryParams = useMemo(() => ({
     page: page ? +page : undefined,
     pageSize,
     dishCategoryId: categoryId?.toString() ?? undefined,
-    productType: type ?? undefined,
+    productType: cleanType, // Передаем очищенную стабильную строку
     destinationOfficeId: destination?.id ?? 0,
-  }), [page, pageSize, categoryId, type, destination?.id]);
+  }), [page, pageSize, categoryId, cleanType, destination?.id]);
 
-  // ✅ ИСПРАВЛЕНИЕ №2: Добавляем strict-проверку среды выполнения в skip.
-  // Запрос блокируется на сервере, пока Next.js 15 не инициализирует сессию в браузере.
   const { data, error, isFetching, refetch } = useGetActualMenuQuery(
     queryParams,
     { skip: destination === null || !destination?.id || typeof window === 'undefined' }
@@ -61,8 +64,20 @@ const Menu : FunctionComponent = () => {
     }
   }, [menuItems, totalPages, dispatch, setPageCount]);
 
-  // ✅ ИСПРАВЛЕНИЕ №3: Безопасный расчет флага загрузки, предотвращающий Hydration Mismatch
   const isMenuLoading = isFetching || !data || typeof window === 'undefined';
+
+  // ✅ ИСПРАВЛЕНИЕ №2: Мемоизируем блок пагинации.
+  // Теперь, когда модератор или пользователь переключает фильтр "тип блюда",
+  // контейнер пагинации не будет совершать паразитных каскадных ререндеров, 
+  // пока RTK Query полностью не получит новый тотал страниц. 
+  // Это на 100% ликвидирует client-side exception при кликах на фильтры.
+  const memoizedPagination = useMemo(() => {
+    return (
+      <Flex w="100%" justify="flex-end" align="flex-end" flex="1 1 auto">
+        <Pagination total={pageCount} boundaries={0} gap={4} size="sm" />
+      </Flex>
+    );
+  }, [pageCount]);
 
   return (
     <Stack
@@ -80,12 +95,8 @@ const Menu : FunctionComponent = () => {
         />
         :
         <>
-          {/* Передаем строго синхронизированный флаг загрузки */}
           <MenuList loading={isMenuLoading} />
-          
-          <Flex w="100%" justify="flex-end" align="flex-end" flex="1 1 auto">
-            <Pagination total={pageCount} boundaries={0} gap={4} size="sm" />
-          </Flex>
+          {memoizedPagination}
         </>
       }
     </Stack>
@@ -93,4 +104,3 @@ const Menu : FunctionComponent = () => {
 };
 
 export default Menu;
-

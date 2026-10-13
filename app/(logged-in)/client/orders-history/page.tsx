@@ -1,6 +1,6 @@
 'use client';
 
-import { FunctionComponent, useEffect, useMemo } from 'react';
+import { FunctionComponent, useEffect, useMemo, useState } from 'react'; // 👈 Вернули useState
 import { NoContentPage, OrderList, OrdersTotal } from '@/components';
 import noOrdersImage from '@/public/204Order.png';
 import { useSearchParamValue, useUpdatePageURL } from '@/shared/hooks';
@@ -13,29 +13,34 @@ const OrdersHistory : FunctionComponent = () => {
   const pageSize = 2;
   const { updateURL } = useUpdatePageURL();
 
-  // Вычисляем текущую страницу строго на основе адресной строки URL (дефолт: 1)
-  const currentPage = pageFromUrl ?? 1;
+  // ✅ ИСПРАВЛЕНИЕ №1: Базируем пагинацию на локальном стейте-числе
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
-  // ✅ Стабилизируем объект параметров для RTK Query с помощью useMemo
+  // Синхронизируем страницу из URL в стейт
+  useEffect(() => {
+    if (pageFromUrl && pageFromUrl !== currentPage) {
+      setCurrentPage(pageFromUrl);
+    }
+  }, [pageFromUrl]);
+
+  // ✅ ИСПРАВЛЕНИЕ №2: Мемоизируем объект строго от примитивного числа currentPage
   const queryParams = useMemo(() => ({
     page: currentPage,
     pageSize,
     active: false
   }), [currentPage, pageSize]);
 
-  // ✅ Блокирует сетевую активность Node.js на этапе SSR до полной инициализации роутера в браузере.
-  const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
-    skip: typeof window === 'undefined'
-  });
+  // Отправляем запрос истории
+  const { data, isFetching, error } = useGetOrdersListQuery(queryParams);
 
-  // Извлекаем примитивы для безопасного отслеживания в зависимостях эффекта
   const totalPages = data?.totalPages;
   const itemsLength = data?.items?.length;
 
-  // Безопасный откат страницы при удалении всех элементов
+  // Автоматический откат страницы при удалении элементов
   useEffect(() => {
     if (totalPages && totalPages !== 0 && itemsLength === 0 && currentPage > totalPages) {
       updateURL(['page'], [totalPages.toString()]);
+      setCurrentPage(totalPages);
     }
   }, [totalPages, itemsLength, currentPage, updateURL]);
 
@@ -47,15 +52,9 @@ const OrdersHistory : FunctionComponent = () => {
     );
   }
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Условие показа лоадера теперь объединяет статус сетевой загрузки 
-  // и серверную проверку. Это гарантирует, что и сервер, и клиент при первой миллисекунде 
-  // отрисуют абсолютно идентичную структуру, полностью исключая Hydration Mismatch.
-  const shouldShowLoader = isFetching || !data || typeof window === 'undefined';
-
-  if (shouldShowLoader) {
+  // ✅ ИСПРАВЛЕНИЕ №3: Лоадер горит строго во время первой загрузки (isFetching && !data)
+  if (isFetching && !data) {
     return (
-      // ✅ ИСПРАВЛЕНИЕ №2: Заменяем локальный scss-класс на стабильные инлайн-стили.
-      // Это страхует компонент LoadingOverlay от каскадных падений из-за задержки инициализации модулей CSS.
       <div style={{ position: 'relative', minHeight: '200px', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <LoadingOverlay visible overlayProps={{ blur: 1 }} />
       </div>
@@ -65,7 +64,7 @@ const OrdersHistory : FunctionComponent = () => {
   return (
     <>
       {
-        data.totalPages === 0
+        !data || data.totalPages === 0
         ?
           <NoContentPage
             buttonLabel="В меню"
@@ -89,4 +88,3 @@ const OrdersHistory : FunctionComponent = () => {
 };
 
 export default OrdersHistory;
-
