@@ -1,6 +1,6 @@
 'use client';
 
-import { FunctionComponent, useMemo } from 'react';
+import { FunctionComponent, useEffect, useMemo, useState } from 'react';
 import { NoContentPage, OrderList } from '@/components';
 import { useSearchParamValue } from '@/shared/hooks';
 import noOrdersImage from '@/public/204Order.png';
@@ -10,55 +10,68 @@ import { ErrorPage } from '@/UI';
 const ActiveOrders : FunctionComponent = () => {
   const pageFromUrl = useSearchParamValue<number>('page');
   const pageSize = 2;
+  const [page, setPage] = useState(pageFromUrl ?? 1);
 
-  // URL — единственный источник правды, убираем useState, чтобы избежать гонки состояний
-  const currentPage = pageFromUrl ? +pageFromUrl : 1;
-
+  // Мемоизируем объект параметров для идеальной стабильности ссылок в React 19
   const queryParams = useMemo(() => ({ 
-    page: currentPage, 
+    page, 
     pageSize, 
     active: true 
-  }), [currentPage, pageSize]);
+  }), [page, pageSize]);
 
-  // ✅ ИСПРАВЛЕНИЕ: Параметр refetchOnMountOrArgChange заставит RTK Query 
-  // принудительно выровнять типы кэша и поднять данные, минуя асинхронные задержки роутера.
-  const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
-    skip: typeof window === 'undefined',
-    refetchOnMountOrArgChange: true, 
-  });
+  // Запрашиваем данные активных заказов
+  const { data, isFetching, error } = useGetOrdersListQuery(queryParams);
+
+  useEffect(() => {
+    if (data?.totalPages && data.totalPages !== 0 && data.items.length === 0) {
+      setPage(data.totalPages);
+    }
+  }, [data]);
+
+  useEffect(() => {
+    const targetPage = pageFromUrl ?? 1;
+    if (targetPage !== page) {
+      setPage(targetPage);
+    }
+  }, [pageFromUrl, page]);
 
   if (error) {
     return (
       <ErrorPage
-        message={(error as any)?.data?.message ?? (error as any)?.message ?? 'Ошибка загрузки заказов'}
+        message={(error as any)?.message}
       />
     );
   }
 
-  // Лоадер горит ТОЛЬКО тогда, когда идет реальная фоновая загрузка И данных в кэше еще нет
-  const showLoader = isFetching && !data;
+  // ✅ ИСПРАВЛЕНИЕ: Рассчитываем строгий контролируемый флаг для скрытия скелетонов.
+  // Серые блоки покажутся ТОЛЬКО тогда, когда идет реальный сетевой запрос (isFetching === true)
+  // И при этом в памяти Redux еще нет вообще никаких загруженных данных (!data || !data.items).
+  // Во всех остальных случаях (включая статус 304 Not Modified) страница мгновенно отобразит реальные заказы!
+  const showSkeletons = isFetching && (!data || !data.items);
 
   return (
     <>
-      {
-        !showLoader && (!data || data.totalPages === 0)
-        ?
-          <NoContentPage
-            buttonLabel="В меню"
-            href="menu"
-            label="Отсутствуют активные заказы :("
-            img={noOrdersImage}
-          />
-        :
-          <OrderList
-            items={data?.items ?? []}
-            totalPages={data?.totalPages ?? 1}
-            pageSize={pageSize}
-            isFetching={showLoader}
-          />
-      }
+    {
+      data?.totalPages === 0
+      ?
+        <NoContentPage
+          buttonLabel="В меню"
+          href="menu"
+          label="Отсутствуют active заказы :("
+          img={noOrdersImage}
+        />
+      :
+      <OrderList
+        items={data?.items ?? []} // Передаем пустой массив в качестве фолбэка, чтобы избежать null в OrderList
+        totalPages={data?.totalPages ?? 1}
+        pageSize={pageSize}
+        // Передаем контролируемый флаг вместо сырого асинхронного isFetching
+        isFetching={showSkeletons}
+      />
+    }
     </>
   );
 };
 
 export default ActiveOrders;
+
