@@ -29,9 +29,19 @@ const ImageList = (props: ImageListProps) => {
     canteenId: office && office !== 'undefined' ? +office : undefined,
   }), [page, s, orderBy, sortOrder, office]);
 
-  // ✅ ИСПРАВЛЕНИЕ: Убрали { skip: isCanteenNotSelected }. 
-  // Галерея загружает все доступные картинки столовых сразу при открытии вкладки.
   const { data, isLoading, isFetching, error } = useGetImageListQuery(queryParams);
+  
+  // 👇 ДОБАВЬТЕ ЭТОТ ТОЧНЫЙ ЛОГ СЮДА:
+  console.log('=== МИНСКTРАНС ДЕБАГ ГАЛЕРЕИ ===', {
+    queryParams,
+    hasData: !!data,
+    dataType: typeof data,
+    isArray: data ? Array.isArray(data) : 'no data',
+    rawResponse: data, // Позволит раскрыть объект стрелочкой в консоли
+    isFetching,
+    isLoading,
+    error: error ? (error as any) : 'no error'
+  });
   
   const images = data?.data ?? [];
   const totalPagesCount = data?.totalPages ?? 1;
