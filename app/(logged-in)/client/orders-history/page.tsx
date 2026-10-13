@@ -1,67 +1,72 @@
 'use client';
 
-import { FunctionComponent, useMemo } from 'react';
+import { FunctionComponent, useEffect, useMemo, useState } from 'react';
 import { NoContentPage, OrderList, OrdersTotal } from '@/components';
 import noOrdersImage from '@/public/204Order.png';
 import { useSearchParamValue } from '@/shared/hooks';
 import { useGetOrdersListQuery } from '@/lib/api/orderApi';
 import { ErrorPage } from '@/UI';
-import { LoadingOverlay } from '@mantine/core';
 
 const OrdersHistory : FunctionComponent = () => {
   const pageFromUrl = useSearchParamValue<number>('page');
   const pageSize = 2;
+  const [page, setPage] = useState(pageFromUrl ?? 1);
 
-  const currentPage = pageFromUrl ? +pageFromUrl : 1;
+  const queryParams = useMemo(() => ({ 
+    page, 
+    pageSize, 
+    active: false 
+  }), [page, pageSize]);
 
-  const queryParams = useMemo(() => ({
-    page: currentPage,
-    pageSize,
-    active: false
-  }), [currentPage, pageSize]);
+  const { data, isFetching, error } = useGetOrdersListQuery(queryParams);
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Добавляем refetchOnMountOrArgChange для уничтожения 304 ответов Nginx
-  const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
-    skip: typeof window === 'undefined',
-    refetchOnMountOrArgChange: true,
-  });
+  useEffect(() => {
+    if (data?.totalPages && data.totalPages !== 0 && data.items.length === 0) {
+      setPage(data.totalPages);
+    }
+  }, [data]);
+
+  useEffect(() => {
+    const targetPage = pageFromUrl ?? 1;
+    if (targetPage !== page) {
+      setPage(targetPage);
+    }
+  }, [pageFromUrl, page]);
 
   if (error) {
     return (
       <ErrorPage
-        message={(error as any)?.data?.message ?? (error as any)?.message ?? 'Ошибка загрузки истории заказов'}
+        message={(error as any)?.message}
       />
     );
   }
 
-  // Спиннер горит только во время первичного fetch-запроса, если кэш пуст
-  const shouldShowLoader = isFetching && !data;
+  // ✅ Контролируемый флаг лоадера для истории заказов
+  const showSkeletons = isFetching && !data;
 
   return (
-    <div style={{ position: 'relative', minHeight: '300px', width: '100%' }}>
-      <LoadingOverlay visible={shouldShowLoader} overlayProps={{ blur: 1 }} />
-      
-      {
-        !shouldShowLoader && (!data || data.totalPages === 0) ? (
-          <NoContentPage
-            buttonLabel="В меню"
-            href="menu"
-            label="История заказов отсутствует :("
-            img={noOrdersImage}
-          />
-        ) : (
-          <>
-            <OrdersTotal />
-            <OrderList
-              items={data?.items ?? []}
-              totalPages={data?.totalPages ?? 1}
-              pageSize={pageSize}
-              isFetching={isFetching}
-            />
-          </>
-        )
-      }
-    </div>
+    <>
+    {
+      data?.totalPages === 0
+      ?
+        <NoContentPage
+          buttonLabel="В меню"
+          href="menu"
+          label="История заказов отсутствует :("
+          img={noOrdersImage}
+        />
+      :
+      <>
+        <OrdersTotal />
+        <OrderList
+          items={data?.items}
+          totalPages={data?.totalPages}
+          pageSize={pageSize}
+          isFetching={showSkeletons} // Передаем showSkeletons
+        />
+      </>
+    }
+    </>
   );
 };
 

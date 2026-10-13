@@ -1,6 +1,6 @@
 'use client';
 
-import { FunctionComponent, useEffect, useMemo, useState } from 'react'; // 👈 Добавили useMemo
+import { FunctionComponent, useEffect, useMemo, useState } from 'react';
 import { NoContentPage, OrderList } from '@/components';
 import { useSearchParamValue } from '@/shared/hooks';
 import noOrdersImage from '@/public/204Order.png';
@@ -12,16 +12,14 @@ const ActiveOrders : FunctionComponent = () => {
   const pageSize = 2;
   const [page, setPage] = useState(pageFromUrl ?? 1);
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Мемоизируем объект параметров для RTK Query.
-  // Теперь ссылка на объект в памяти будет железобетонно стабильной. 
-  // Это полностью блокирует бесконечный сброс кэша и прекращает вечную загрузку.
+  // Мемоизируем объект параметров для идеальной стабильности ссылок в React 19
   const queryParams = useMemo(() => ({ 
     page, 
     pageSize, 
     active: true 
   }), [page, pageSize]);
 
-  // Передаем стабильный queryParams вместо создания объекта "на лету"
+  // Запрашиваем данные активных заказов
   const { data, isFetching, error } = useGetOrdersListQuery(queryParams);
 
   useEffect(() => {
@@ -30,9 +28,6 @@ const ActiveOrders : FunctionComponent = () => {
     }
   }, [data]);
 
-  // ✅ ИСПРАВЛЕНИЕ №2: Добавляем строгое условие проверки.
-  // Метод setPage выполнится ТОЛЬКО если страница из URL реально отличается от текущего стейта.
-  // Это исключает холостые каскадные ререндеры при асинхронном старте роутера Next.js 15.
   useEffect(() => {
     const targetPage = pageFromUrl ?? 1;
     if (targetPage !== page) {
@@ -47,6 +42,12 @@ const ActiveOrders : FunctionComponent = () => {
       />
     );
   }
+
+  // ✅ ИСПРАВЛЕНИЕ: Рассчитываем строгий контролируемый флаг загрузки для скелетонов.
+  // Блоки загрузки (скелетоны) покажутся ТОЛЬКО тогда, когда идет реальный сетевой fetch-запрос (isFetching === true)
+  // И при этом в памяти Redux еще нет вообще никаких загруженных данных (!data).
+  // Во всех остальных случаях (включая статус 304 Not Modified) страница мгновенно покажет реальные карточки заказов!
+  const showSkeletons = isFetching && !data;
 
   return (
     <>
@@ -64,8 +65,8 @@ const ActiveOrders : FunctionComponent = () => {
         items={data?.items}
         totalPages={data?.totalPages}
         pageSize={pageSize}
-        // Передаем флаг сетевого префетчинга
-        isFetching={isFetching}
+        // Передаем контролируемый флаг вместо сырого асинхронного isFetching
+        isFetching={showSkeletons}
       />
     }
     </>
@@ -73,4 +74,3 @@ const ActiveOrders : FunctionComponent = () => {
 };
 
 export default ActiveOrders;
-
