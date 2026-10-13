@@ -32,6 +32,7 @@ export const orderApi = createApi({
         return [];
       },
     }),
+        // Найдите getOrdersList внутри вашего файла orderApi.ts и замените его на этот:
     getOrdersList: builder.query({
       query: (params: GetActiveOrdersParams) => {
         if (!params || typeof params.active === 'undefined') {
@@ -41,14 +42,18 @@ export const orderApi = createApi({
           url: 'order/list',
           params,
         };
-      },
-      transformResponse: (res) => res as {
-        items: OrderMainInfoDto[],
-        totalPages: number
+      },     
+      transformResponse: (res) => {
+        if (!res) return undefined; 
+        return res as {
+          items: OrderMainInfoDto[],
+          totalPages: number
+        };
       },
       transformErrorResponse,
-      providesTags: ['ActiveOrdersList'], // Привязан строго к списку заказов
+      providesTags: ['ActiveOrdersList'],
     }),
+
     getOrderInfo: builder.query({
       query: (params: { issued: string, number: number }) => {
         if (!params || !params.issued || !params.number) {
