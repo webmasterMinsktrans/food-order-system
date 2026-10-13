@@ -2,7 +2,7 @@ import { createApi } from '@reduxjs/toolkit/query/react';
 import { baseQueryWithExpire, transformErrorResponse } from './baseApi';
 import { OrderFullInfoDto, OrderMainInfoDto } from '@/shared/types';
 
-export type MakeOrderItem = {id: number, count:number, comment?:string};
+export type MakeOrderItem = { id: number, count: number, comment?: string };
 export type MakeOrderParams = {
   menuPositions: MakeOrderItem[],
   deliveryDestinationId: number,
@@ -15,10 +15,12 @@ export type GetActiveOrdersParams = {
 
 export const orderApi = createApi({
   reducerPath: 'orderApi',
-  tagTypes: ['ActiveOrdersList'],
+  // ✅ ИСПРАВЛЕНИЕ №1: Разделяем типы тегов. 
+  // Добавляем отдельный независимый тег для общей суммы заказов за месяц.
+  tagTypes: ['ActiveOrdersList', 'OrdersTotalSummary'],
   baseQuery: baseQueryWithExpire,
   endpoints: (builder) => ({
-    makeOrder: builder.mutation({ // ✅ ИСПРАВЛЕНИЕ №1: Убраны лишние скобки вызова функции в builder.mutation
+    makeOrder: builder.mutation({
       query: (body: MakeOrderParams) => ({
         url: 'order/create',
         body,
@@ -26,13 +28,12 @@ export const orderApi = createApi({
       }),
       transformErrorResponse,
       invalidatesTags: (result, error) => {
-        if (!error) return ['ActiveOrdersList'];
+        if (!error) return ['ActiveOrdersList', 'OrdersTotalSummary']; // Сбрасываем и список, и сумму при создании заказа
         return [];
       },
     }),
     getOrdersList: builder.query({
       query: (params: GetActiveOrdersParams) => {
-        // ✅ ИСПРАВЛЕНИЕ №2: Предохранитель от бесконечного цикла Next.js 15 при асинхронных params из URL
         if (!params || typeof params.active === 'undefined') {
           return { url: 'order/list' };
         }
@@ -46,17 +47,16 @@ export const orderApi = createApi({
         totalPages: number
       },
       transformErrorResponse,
-      providesTags: ['ActiveOrdersList'],
+      providesTags: ['ActiveOrdersList'], // Привязан строго к списку заказов
     }),
     getOrderInfo: builder.query({
       query: (params: { issued: string, number: number }) => {
-        // ✅ ИСПРАВЛЕНИЕ №3: Защита от неинициализированных параметров во время SSR гидратации
         if (!params || !params.issued || !params.number) {
           return { url: 'order/empty' };
         }
         return {
           url: `order/${params.issued}/${params.number}`,
-        }; // Дублирование params внутрь GET-запроса удалено, так как данные уже есть в самом URL пути
+        };
       },
       transformResponse: (res) => res as OrderFullInfoDto,
       transformErrorResponse,
@@ -69,7 +69,7 @@ export const orderApi = createApi({
       transformResponse: (res) => res,
       transformErrorResponse,
       invalidatesTags: (result, error) => {
-        if (!error) return ['ActiveOrdersList'];
+        if (!error) return ['ActiveOrdersList', 'OrdersTotalSummary']; // Сбрасываем кэш при отмене заказа
         return [];
       },
     }),
@@ -78,7 +78,9 @@ export const orderApi = createApi({
         url: 'order/total/',
         params,
       }),
-      providesTags: ['ActiveOrdersList'],
+      // ✅ ИСПРАВЛЕНИЕ №2: Вешаем на эндпоинт суммы свой собственный независимый тег.
+      // Теперь вызов общей суммы больше никогда не сможет принудительно стереть кэш списка реальных заказов!
+      providesTags: ['OrdersTotalSummary'],
       transformResponse: (res) => res as { totalCount: number, totalPrice: number },
       transformErrorResponse,
     }),
