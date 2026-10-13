@@ -48,7 +48,14 @@ const ActiveOrders : FunctionComponent = () => {
   // И при этом в памяти Redux еще нет вообще никаких загруженных данных (!data || !data.items).
   // Во всех остальных случаях (включая статус 304 Not Modified) страница мгновенно отобразит реальные заказы!
   const showSkeletons = isFetching && (!data || !data.items);
-
+   
+  console.log('=== МИНСКTРАНС: РОДИТЕЛЬ ===', { 
+    hasData: !!data, 
+    itemsCount: data?.items?.length, 
+    isFetching, 
+    error: error ? true : false 
+  });
+  
   return (
     <>
     {

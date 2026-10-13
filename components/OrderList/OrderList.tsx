@@ -16,6 +16,12 @@ interface OrderListProps extends StackProps {
 export const OrderList: FunctionComponent<OrderListProps> = (props) => {
   const { items, totalPages = 1, isFetching = false, pageSize, ...stackProps } = props;
 
+  // 👇 ДОБАВЬТЕ ЭТУ СТРОКУ ДЛЯ ДЕБАГА
+  console.log('=== МИНСКTРАНС: СПИСОК ===', { 
+    itemsReceived: !!items, 
+    length: items?.length, 
+    isFetching 
+  });
   // ✅ ИСПРАВЛЕНИЕ №1: Мемоизируем скелетоны загрузки.
   // Теперь массив пустых карточек создается строго один раз при изменении pageSize,
   // что полностью убирает паразитные каскадные ререндеры в React 19.
@@ -36,6 +42,8 @@ export const OrderList: FunctionComponent<OrderListProps> = (props) => {
       />
     ));
   }, [items]);
+
+  
 
   return (
     <Stack gap="xl" align="center" w="100%" {...stackProps}>
