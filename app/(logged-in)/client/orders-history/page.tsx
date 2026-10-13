@@ -18,10 +18,13 @@ const OrdersHistory : FunctionComponent = () => {
     active: false 
   }), [page, pageSize]);
 
-  const { data, isFetching, error } = useGetOrdersListQuery(queryParams);
+  // Добавляем параметр восстановления кэша при ответах 304
+  const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
+    refetchOnMountOrArgChange: true,
+  });
 
   useEffect(() => {
-    if (data?.totalPages && data.totalPages !== 0 && data.items.length === 0) {
+    if (data?.totalPages && data.totalPages !== 0 && data.items?.length === 0) {
       setPage(data.totalPages);
     }
   }, [data]);
@@ -36,36 +39,35 @@ const OrdersHistory : FunctionComponent = () => {
   if (error) {
     return (
       <ErrorPage
-        message={(error as any)?.message}
+        message={(error as any)?.data?.message ?? (error as any)?.message ?? 'Ошибка загрузки'}
       />
     );
   }
 
-  // ✅ Контролируемый флаг лоадера для истории заказов
-  const showSkeletons = isFetching && !data;
+  const showLoader = isFetching || !data || !data.items;
 
   return (
     <>
-    {
-      data?.totalPages === 0
-      ?
-        <NoContentPage
-          buttonLabel="В меню"
-          href="menu"
-          label="История заказов отсутствует :("
-          img={noOrdersImage}
-        />
-      :
-      <>
-        <OrdersTotal />
-        <OrderList
-          items={data?.items}
-          totalPages={data?.totalPages}
-          pageSize={pageSize}
-          isFetching={showSkeletons} // Передаем showSkeletons
-        />
-      </>
-    }
+      {
+        data?.totalPages === 0
+        ?
+          <NoContentPage
+            buttonLabel="В меню"
+            href="menu"
+            label="История заказов отсутствует :("
+            img={noOrdersImage}
+          />
+        :
+          <>
+            <OrdersTotal />
+            <OrderList
+              items={data?.items ?? []}
+              totalPages={data?.totalPages ?? 1}
+              pageSize={pageSize}
+              isFetching={showLoader}
+            />
+          </>
+      }
     </>
   );
 };
