@@ -3,7 +3,7 @@
 import { Grid, ModalProps, Title } from '@mantine/core';
 import { FunctionComponent, useContext } from 'react';
 import { MobilePillsInput, MobileModal } from '@/UI';
-import { FilterContext } from '../MenuFilterBar';
+import { FilterContext } from '..';
 
 
 interface FilterModalProps extends ModalProps {}
