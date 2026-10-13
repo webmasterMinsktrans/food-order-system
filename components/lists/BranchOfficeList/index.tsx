@@ -13,19 +13,35 @@ import commonClasses from '../styles.module.scss';
 interface BranchOfficeListProps {}
 
 const BranchOfficeList = (props: BranchOfficeListProps) => {
-  // Деструктурируем параметры из URL
   const [page, sortOrder, orderBy] = useSearchParamValues(['page', 'order', 'sort']);
 
-  // Стабилизируем ссылку на объект параметров через useMemo
-  const queryParams = useMemo(() => ({
-    page: page ? +page : 1,
-    pageSize: 30,
-    orderBy: orderBy ?? 'id',
-    sortOrder: sortOrder ?? 'desc'
-  }), [page, sortOrder, orderBy]);
+  // Очищаем параметры от "грязи" асинхронной гидратации Next.js 15
+  const cleanOrderBy = useMemo(() => {
+    if (!orderBy || orderBy === 'undefined' || orderBy === 'null') return 'id';
+    return String(orderBy); // Жестко приводим к строке
+  }, [orderBy]);
 
-  // Передаем мемоизированный объект параметров в хук
-  const { data, error, isFetching, refetch } = useGetOfficeFullInfoListQuery(queryParams);
+  const cleanSortOrder = useMemo(() => {
+    if (!sortOrder || sortOrder === 'undefined' || sortOrder === 'null') return 'desc';
+    return String(sortOrder);
+  }, [sortOrder]);
+
+  const cleanPage = useMemo(() => {
+    if (!page || page === 'undefined' || page === 'null') return 1;
+    return +page;
+  }, [page]);
+
+  const queryParams = useMemo(() => ({
+    page: cleanPage,
+    pageSize: 30,
+    orderBy: cleanOrderBy,
+    sortOrder: cleanSortOrder
+  }), [cleanPage, cleanOrderBy, cleanSortOrder]);
+
+
+  const { data, error, isFetching, refetch } = useGetOfficeFullInfoListQuery(queryParams, {
+    refetchOnMountOrArgChange: true, // 👈 ГАРАНТИЯ СБРОСА ЗАВИСАНИЯ
+  });
 
   if (error) {
     return (
@@ -36,20 +52,14 @@ const BranchOfficeList = (props: BranchOfficeListProps) => {
     );
   }
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Безопасное извлечение массива данных с защитой от undefined
   const officeItems = data?.data ?? [];
   const totalPagesCount = data?.totalPages ?? 1;
 
-  // ✅ ИСПРАВЛЕНИЕ №2: Вычисляем реальное наличие данных в памяти браузера
   const hasLoadedData = data && officeItems.length > 0;
   const hasNoData = !isFetching && data && officeItems.length === 0;
 
   return (
-    // ✅ ИСПРАВЛЕНИЕ №3: Оборачиваем весь рендер в контейнер с относительным позиционированием.
-    // Мы полностью вырезали старый блокирующий "if (isFetching || hasNoData) return ...".
-    // Теперь разметка стабильна, а LoadingOverlay мягко перекрывает контейнер, не разрушая связи Virtual DOM!
     <div style={{ position: 'relative', minHeight: '300px', width: '100%' }}>
-      {/* Главный спиннер перекрывает список только во время активного сетевого запроса */}
       <LoadingOverlay visible={isFetching || !data} overlayProps={{ blur: 1 }} />
       
       {
@@ -59,9 +69,8 @@ const BranchOfficeList = (props: BranchOfficeListProps) => {
             <Title order={3} style={{ marginTop: '16px' }}>По вашему запросу ничего не найдено</Title>
           </div>
         ) : (
-          // Отрисовываем контент, передавая безопасный массив officeItems в таблицу
           <>
-            <BranchesTable items={officeItems} />
+            {hasLoadedData && <BranchesTable items={officeItems} />}
             
             {hasLoadedData && (
               <div className={commonClasses.pagination}>

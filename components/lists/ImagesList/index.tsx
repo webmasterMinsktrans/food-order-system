@@ -19,25 +19,21 @@ interface ImageListProps {}
 const ImageList = (props: ImageListProps) => {
   const [page, s, sortOrder, orderBy, office] = useSearchParamValues(['page', 's', 'order', 'sort', 'office']);
 
-  // Стабилизируем ссылку на объект параметров через useMemo
   const queryParams = useMemo(() => ({
     page: +(page ?? 1), 
     pageSize: 20,
     s,
     orderBy,
     sortOrder,
-    canteenId: office ? +office : undefined,
+    // ✅ Исправление: передаем canteenId только если он реально выбран модератором
+    canteenId: office && office !== 'undefined' ? +office : undefined,
   }), [page, s, orderBy, sortOrder, office]);
 
-  // Проверяем, пуст ли параметр выбранной столовой в URL
-  const isCanteenNotSelected = !office || office === '' || office === 'undefined';
-
-  // Передаем мемоизированный queryParams и управляем с помощью skip
-  const { data, isLoading, isFetching, error } = useGetImageListQuery(queryParams, {
-    skip: isCanteenNotSelected
-  });
+  // ✅ ИСПРАВЛЕНИЕ: Убрали { skip: isCanteenNotSelected }. 
+  // Галерея загружает все доступные картинки столовых сразу при открытии вкладки.
+  const { data, isLoading, isFetching, error } = useGetImageListQuery(queryParams);
   
-  const images = data?.data ?? []; // ✅ Исправление: гарантируем безопасный массив по умолчанию
+  const images = data?.data ?? [];
   const totalPagesCount = data?.totalPages ?? 1;
   const [picked, setPicked] = useState<number[]>([]);
   
@@ -107,7 +103,6 @@ const ImageList = (props: ImageListProps) => {
     })
   };
 
-  // Безопасный расчет смещения выпадающего меню без падения на сервере
   const menuOffset = useMemo(() => {
     const screenWidth = typeof window !== 'undefined' ? window.screen.width : 1920;
     return {
@@ -116,18 +111,6 @@ const ImageList = (props: ImageListProps) => {
     };
   }, [coordinates.x, coordinates.y]);
 
-  // Если столовая ещё не выбрана в фильтре — показываем аккуратное приглашение к действию
-  if (isCanteenNotSelected) {
-    return (
-      <div className={classes.loadingBox} style={{ paddingTop: '60px' }}>
-        <Title order={4} c="dimmed" ta="center" style={{ fontWeight: 500 }}>
-          Для просмотра галереи блюд выберите столовую в фильтре выше
-        </Title>
-      </div>
-    );
-  }
-
-  // Контролируем обработку ошибок сервера
   if (error) {
     return (
       <div className={classes.loadingBox} style={{ paddingTop: '40px' }}>
@@ -138,16 +121,11 @@ const ImageList = (props: ImageListProps) => {
     );
   }
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Вычисляем реальное наличие картинок в кэше Redux
   const hasLoadedData = data && images.length > 0;
   const hasNoData = !isFetching && data && images.length === 0;
 
   return (
-    // ✅ ИСПРАВЛЕНИЕ №2: Оборачиваем весь рендер в контейнер с относительным позиционированием.
-    // Мы полностью вырезали старый блокирующий "if (isFetching || !data)".
-    // Теперь разметка стабильна, а LoadingOverlay мягко перекрывает контейнер, не ломая Virtual DOM!
     <div style={{ position: 'relative', minHeight: '400px', width: '100%' }}>
-      {/* Главный спиннер перекрывает галерею только во время активного сетевого запроса */}
       <LoadingOverlay visible={isFetching || !data} overlayProps={{ blur: 1 }} />
       
       {
@@ -166,7 +144,6 @@ const ImageList = (props: ImageListProps) => {
           >
             <Flex className={classes.imageList}>
               <LoadingOverlay visible={deleteImagesResult.isLoading || deleteImagesTagsResult.isLoading} />
-              {/* Скелетон Mantine показывается только при первичной инициализации, когда данных нет вообще */}
               {isLoading && !hasLoadedData && <Skeleton mih={1000} miw={1400}/>}
               {
                 images.map((img)=>(
