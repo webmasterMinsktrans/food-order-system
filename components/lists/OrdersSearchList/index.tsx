@@ -8,33 +8,23 @@ import Image from "next/image";
 import { useSearchOrdersQuery } from "@/lib/api/moderatorApi";
 import { OrdersTable } from "@/components";
 import { stringToPeriod } from "@/shared/helpers";
-import { useMemo } from "react"; // 👈 Добавили useMemo
 import commonClasses from '../styles.module.scss';
+
 
 const OrdersSearchList = () => {
   const pageSize = 20;
-  const [page, order, sort, office, period] = useSearchParamValues(['page', 'order', 'sort', 'office', 'period']);
-
-  // ✅ ИСПРАВЛЕНИЕ №1: Мемоизируем парсинг периода, чтобы массив не пересоздавался при каждом рендере
-  const periodParam = useMemo(() => {
-    return stringToPeriod(period ?? '');
-  }, [period]);
-
-  // ✅ ИСПРАВЛЕНИЕ №2: Стабилизируем весь объект параметров для RTK Query
-  const queryParams = useMemo(() => ({
-    page: page ? +page : 1,
+  const params = useSearchParamValues(['page','order','sort', 'office', 'period']);
+  const periodParam = stringToPeriod(params[4] ?? '');
+  const { data, isFetching, error, refetch } = useSearchOrdersQuery({
+    page: params[0] ? +params[0] : 1,
     pageSize,
-    sortOrder: order,
-    orderBy: sort,
-    deliveryDestinationId: office,
+    sortOrder: params[1],
+    orderBy:params[2],
+    deliveryDestinationId: params[3],
     periodStart: periodParam[0] ? periodParam[0] : undefined,
     periodEnd: periodParam[1] ? periodParam[1] : undefined
-  }), [page, order, sort, office, periodParam]);
-
-  // Передаем мемоизированный queryParams
-  const { data, isFetching, error, refetch } = useSearchOrdersQuery(queryParams);
-
-  if (error) {
+  });
+  if(error){
     return (
       <ErrorPage 
         message={(error as any)?.message ?? 'Неизвестная ошибка'} 
@@ -42,12 +32,7 @@ const OrdersSearchList = () => {
       />
     );
   }
-
-  // ✅ ИСПРАВЛЕНИЕ №3: Оптимизируем условие проверки. 
-  // Используем data.data для проверки длины, только если данные успешно загружены и не находятся в процессе fetch
-  const hasNoData = !isFetching && data && data.data.length === 0;
-
-  if (isFetching || hasNoData) {
+  if(isFetching || data?.data.length===0){
     return (
       <div className={commonClasses.loadingBox}>
         {
@@ -62,7 +47,6 @@ const OrdersSearchList = () => {
       </div>
     )
   }
-
   return (
     <>
       <OrdersTable items={data?.data ?? []}/>
