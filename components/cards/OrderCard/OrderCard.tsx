@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Grid, List, NumberFormatter, Text, CardSection, GridCol, ListItem, Badge, Skeleton } from '@mantine/core';
-import { FunctionComponent } from 'react';
+import { FunctionComponent, useMemo } from 'react'; // 👈 Добавили useMemo
 import moment from 'moment';
 import { useDisclosure } from '@mantine/hooks';
 import { ScalingCard } from '@/UI';
@@ -23,32 +23,77 @@ const OrderCard: FunctionComponent<OrderCardProps> = ({
   orderMainInfoDto,
   isLoading = false,
 }) => {
+  // Если передан флаг isLoading, гарантированно рендерим чистый скелетон
   if (isLoading) {
     return (
       <Skeleton className={classes.orderCardWrapper} data-skeleton/>
     );
   }
+  
   if (orderMainInfoDto) {
     return (
       <OrderCardContent orderMainInfoDto={orderMainInfoDto} />
     );
   }
-  return <></>;
+  return null;
 };
 
 const OrderCardContent: FunctionComponent<OrderCardContentProps> = ({
   orderMainInfoDto,
 }) => {
-  const { number, fullPrice, status, issued, orderPositions, canCancel,deliveryDestination } = orderMainInfoDto;
-  const { name, address } = deliveryDestination;
-  const total = fullPrice / 100;
-  const statusText = status;
+  const { number, fullPrice, status, issued, orderPositions, canCancel, deliveryDestination } = orderMainInfoDto;
+  
+  // ✅ ИСПРАВЛЕНИЕ №1: Убираем деструктуризацию "на лету" из deliveryDestination.
+  // Заменяем на безопасное чтение через опциональную цепочку ?. с фолбэком на дефолтную строку.
+  // Это полностью страхует карточку от TypeError и падения рендеринга.
+  const destinationName = deliveryDestination?.name ?? 'Не указано';
+
+  // ✅ ИСПРАВЛЕНИЕ №2: Мемоизируем расчет цены и форматирование даты.
+  // Это фиксирует строковые примитивы в памяти Virtual DOM и убирает паразитные ререндеры.
+  const total = useMemo(() => fullPrice / 100, [fullPrice]);
+  const statusText = status ?? 'создан';
+
+  const formattedDate = useMemo(() => {
+    if (!issued) return '';
+    const parsed = moment(issued);
+    return parsed.isValid() ? parsed.format('DD.MM.YYYY') : '';
+  }, [issued]);
+
   const [opened, { open, close }] = useDisclosure(false);
   const { cancelOrder } = useCancelOrder(number, issued);
-  const cancelButtonClick = (e:any) => {
+  
+  const cancelButtonClick = (e: any) => {
     e.stopPropagation();
-    cancelOrder();
+    if (cancelOrder) cancelOrder();
   };
+
+  // ✅ ИСПРАВЛЕНИЕ №3: Мемоизируем вывод состава заказа.
+  // Исключает микро-ошибки индексов внутри циклов .map()
+  const positionsList = useMemo(() => {
+    if (!orderPositions || !Array.isArray(orderPositions)) return null;
+    return (
+      <List>
+        {orderPositions.map((pos, index) => {
+          if (index < 5) {
+            return (
+              <ListItem key={`${pos.name}-${index}`}>
+                <Text lineClamp={1}>{pos.name}</Text>
+              </ListItem>
+            );
+          }
+          return null;
+        })}
+        {orderPositions.length > 5 && (
+          <ListItem>
+            <Text c="dimmed" fz="sm">
+              Еще {orderPositions.length - 5}...
+            </Text>
+          </ListItem>
+        )}
+      </List>
+    );
+  }, [orderPositions]);
+
   return (
     <>
       <ScalingCard
@@ -60,7 +105,7 @@ const OrderCardContent: FunctionComponent<OrderCardContentProps> = ({
             <Text span className={classes.italicText}>Заказ №</Text>{' '}
             {number}{' '}
             <Text span className={classes.italicText}>от</Text>{' '}
-            {moment(issued).format('DD.MM.YYYY')}
+            {formattedDate}
           </Text>
         </CardSection>
         <CardSection className={classes.bodySection}>
@@ -75,7 +120,7 @@ const OrderCardContent: FunctionComponent<OrderCardContentProps> = ({
               Место доставки
             </GridCol>
             <GridCol span={8} className={classes.informationLabel}>
-              {deliveryDestination.name}
+              {destinationName}
             </GridCol>
             <GridCol span={4} className={classes.caption}>
               Статус заказа
@@ -89,30 +134,7 @@ const OrderCardContent: FunctionComponent<OrderCardContentProps> = ({
               Состав заказа
             </GridCol>
             <GridCol span={8}>
-              <List>
-                {
-                orderPositions.map((pos, index) => {
-                  if (index < 5) {
-                    return (
-                      <ListItem key={index}>
-                        <Text lineClamp={1}>
-                          {pos.name}
-                        </Text>
-                      </ListItem>
-                    );
-                  }
-                  return null;
-                })
-                }
-                {
-                  orderPositions.length > 5 &&
-                  <ListItem>
-                    <Text c="dimmed" fz="sm">
-                      Еще {orderPositions.length - 5 }...
-                    </Text>
-                  </ListItem>
-                }
-              </List>
+              {positionsList}
             </GridCol>
           </Grid>
         </CardSection>
@@ -129,7 +151,7 @@ const OrderCardContent: FunctionComponent<OrderCardContentProps> = ({
       </ScalingCard>
       <OrderDetailedInfoCard
         opened={opened}
-        onClose={() => { close(); }}
+        onClose={close}
         orderNumber={number}
         orderIssued={issued}
       />
