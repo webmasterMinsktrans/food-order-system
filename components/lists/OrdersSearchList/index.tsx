@@ -8,31 +8,52 @@ import Image from "next/image";
 import { useSearchOrdersQuery } from "@/lib/api/moderatorApi";
 import { OrdersTable } from "@/components";
 import { stringToPeriod } from "@/shared/helpers";
+import { useMemo } from "react";
+import dayjs from "dayjs"; 
 import commonClasses from '../styles.module.scss';
-
 
 const OrdersSearchList = () => {
   const pageSize = 20;
-  const params = useSearchParamValues(['page','order','sort', 'office', 'period']);
-  const periodParam = stringToPeriod(params[4] ?? '');
-  const { data, isFetching, error, refetch } = useSearchOrdersQuery({
-    page: params[0] ? +params[0] : 1,
-    pageSize,
-    sortOrder: params[1],
-    orderBy:params[2],
-    deliveryDestinationId: params[3],
-    periodStart: periodParam[0] ? periodParam[0] : undefined,
-    periodEnd: periodParam[1] ? periodParam[1] : undefined
-  });
-  if(error){
+  const [page, order, sort, office, period] = useSearchParamValues(['page', 'order', 'sort', 'office', 'period']);
+
+  // 1. Мемоизируем парсинг периода, чтобы массив не пересоздавался в памяти при каждом рендере
+  const periodParam = useMemo(() => {
+    return stringToPeriod(period ?? '');
+  }, [period]);
+
+  // 2. Стабилизируем и строго типизируем объект параметров для RTK Query
+  const queryParams = useMemo(() => {
+    // Безопасно преобразуем нативные Date в строки ISO-формата, чтобы удовлетворить тип string в контракте API
+    const startIso = periodParam && periodParam[0] ? dayjs(periodParam[0]).toISOString() : undefined;
+    const endIso = periodParam && periodParam[1] ? dayjs(periodParam[1]).toISOString() : undefined;
+
+    return {
+      page: page ? +page : 1,
+      pageSize,
+      sortOrder: order || undefined,
+      orderBy: sort || undefined,
+      deliveryDestinationId: office || undefined,
+      periodStart: startIso,
+      periodEnd: endIso
+    };
+  }, [page, order, sort, office, periodParam]);
+
+  // Передаем мемоизированный queryParams вместо создания объекта "на лету"
+  const { data, isFetching, error, refetch } = useSearchOrdersQuery(queryParams);
+
+  if (error) {
     return (
       <ErrorPage 
-        message={(error as any)?.message ?? 'Неизвестная ошибка'} 
+        message={(error as any)?.data?.message ?? (error as any)?.message ?? 'Неизвестная ошибка'} 
         onRetry={refetch}
       />
     );
   }
-  if(isFetching || data?.data.length===0){
+
+  // Контролируем показ пустого состояния, чтобы избежать мерцания интерфейса во время фонового fetch
+  const hasNoData = !isFetching && data && data.data.length === 0;
+
+  if (isFetching || hasNoData) {
     return (
       <div className={commonClasses.loadingBox}>
         {
@@ -47,6 +68,7 @@ const OrdersSearchList = () => {
       </div>
     )
   }
+
   return (
     <>
       <OrdersTable items={data?.data ?? []}/>
