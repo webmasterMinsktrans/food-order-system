@@ -2,7 +2,8 @@
 
 import { FunctionComponent, useMemo } from 'react';
 import { NoContentPage, OrderList } from '@/components';
-import { useSearchParamValue } from '@/shared/hooks';
+import { useSearchParamValue, useAppSelector } from '@/shared/hooks';
+
 import noOrdersImage from '@/public/204Order.png';
 import { useGetOrdersListQuery } from '@/lib/api/orderApi';
 import { ErrorPage } from '@/UI';
