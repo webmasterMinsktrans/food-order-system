@@ -1,6 +1,6 @@
 'use client';
 
-import { FunctionComponent, useEffect, useMemo, useState } from 'react';
+import { FunctionComponent, useMemo } from 'react';
 import { NoContentPage, OrderList } from '@/components';
 import { useSearchParamValue } from '@/shared/hooks';
 import noOrdersImage from '@/public/204Order.png';
@@ -10,38 +10,22 @@ import { ErrorPage } from '@/UI';
 const ActiveOrders : FunctionComponent = () => {
   const pageFromUrl = useSearchParamValue<number>('page');
   const pageSize = 2;
-  const [page, setPage] = useState(pageFromUrl ?? 1);
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Стабилизируем параметры. 
-  // Если ваш бэкенд Express принимает строку, передаем "true" / "false".
-  // Если бэкенд строго требует boolean, оставляем true, но ОБЯЗАТЕЛЬНО добавляем refetchOnMountOrArgChange ниже.
+  // URL — единственный источник правды, убираем useState, чтобы избежать гонки состояний
+  const currentPage = pageFromUrl ? +pageFromUrl : 1;
+
   const queryParams = useMemo(() => ({ 
-    page, 
+    page: currentPage, 
     pageSize, 
-    active: true // Передаем легитимный boolean тип
-  }), [page, pageSize]);
+    active: true 
+  }), [currentPage, pageSize]);
 
-  // Запрашиваем данные
+  // ✅ ИСПРАВЛЕНИЕ: Параметр refetchOnMountOrArgChange заставит RTK Query 
+  // принудительно выровнять типы кэша и поднять данные, минуя асинхронные задержки роутера.
   const { data, isFetching, error } = useGetOrdersListQuery(queryParams, {
-    // ✅ ИСПРАВЛЕНИЕ №2: Этот флаг заставит RTK Query принудительно перепроверить типы 
-    // и поднять данные из правильной ветки оперативной памяти Redux, минуя асинхронные задержки Next.js 15
-    refetchOnMountOrArgChange: true,
+    skip: typeof window === 'undefined',
+    refetchOnMountOrArgChange: true, 
   });
-
-  console.log('МИНСКTРАНС ДЕБАГ:', { data, isFetching, error, pageFromUrl, page });
-
-  useEffect(() => {
-    if (data?.totalPages && data.totalPages !== 0 && data.items?.length === 0) {
-      setPage(data.totalPages);
-    }
-  }, [data]);
-
-  useEffect(() => {
-    const targetPage = pageFromUrl ?? 1;
-    if (targetPage !== page) {
-      setPage(targetPage);
-    }
-  }, [pageFromUrl, page]);
 
   if (error) {
     return (
@@ -51,14 +35,13 @@ const ActiveOrders : FunctionComponent = () => {
     );
   }
 
-  // ✅ ИСПРАВЛЕНИЕ №3: Лоадер должен гореть ТОЛЬКО тогда, когда идет реальная загрузка
-  // И при этом у нас ЕЩЕ НЕТ никаких данных в памяти (!data || !data.items).
-  const showLoader = isFetching && (!data || !data.items);
+  // Лоадер горит ТОЛЬКО тогда, когда идет реальная фоновая загрузка И данных в кэше еще нет
+  const showLoader = isFetching && !data;
 
   return (
     <>
       {
-        !showLoader && (data?.totalPages === 0 || !data?.items)
+        !showLoader && (!data || data.totalPages === 0)
         ?
           <NoContentPage
             buttonLabel="В меню"
@@ -71,7 +54,7 @@ const ActiveOrders : FunctionComponent = () => {
             items={data?.items ?? []}
             totalPages={data?.totalPages ?? 1}
             pageSize={pageSize}
-            isFetching={showLoader} // Передаем showLoader
+            isFetching={showLoader}
           />
       }
     </>
@@ -79,4 +62,3 @@ const ActiveOrders : FunctionComponent = () => {
 };
 
 export default ActiveOrders;
-
