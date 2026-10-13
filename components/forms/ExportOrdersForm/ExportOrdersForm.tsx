@@ -34,7 +34,7 @@ const ExportOrdersForm = (props: ExportOrdersFormProps) => {
     }
   });
 
-  const downloadFile = async () => {
+    const downloadFile = async () => {
     if (form.validate().hasErrors) return;
     const values = form.getValues();
     const params = { 
@@ -44,34 +44,19 @@ const ExportOrdersForm = (props: ExportOrdersFormProps) => {
     };
 
     try {
-      const result = await query(params).unwrap();
-      
-      if (!result) {
-        throw new Error('Сервер вернул пустой ответ. Возможно, за этот период нет заказов.');
+      // Просто отправляем запрос. RTK Query сам скачает файл через свои внутренние механизмы.
+      const response = await query(params);
+
+      // Если сервер вернул ошибку, пробрасываем её в catch
+      if (response.error) {
+        throw response.error;
       }
 
-      const fileBlob = result instanceof Blob 
-        ? result 
-        : new Blob([result], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-
-      if (fileBlob.size > 0) {
-        const url = window.URL.createObjectURL(fileBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `orders_${dayjs().format('YYYY-MM-DD')}.docx`);
-        document.body.appendChild(link);
-        link.click();
-        
-        link.parentNode?.removeChild(link);
-        window.URL.revokeObjectURL(url);
-
-        NotificationService.showSuccessNotification({
-          title: 'Список заказов получен',
-          message: 'Заказы пользователей, включенные в отчет, будут помечены как принятые',
-        });
-      } else {
-        throw new Error('Размер файла отчета равен 0 байт. Нет данных для выгрузки.');
-      }
+      // Если всё успешно, просто показываем зеленое уведомление
+      NotificationService.showSuccessNotification({
+        title: 'Список заказов получен',
+        message: 'Заказы пользователей, включенные в отчет, будут помечены как принятые',
+      });
 
     } catch (error) {
       console.error('Ошибка выгрузки:', error);
@@ -81,6 +66,7 @@ const ExportOrdersForm = (props: ExportOrdersFormProps) => {
       });
     }
   };
+
 
   return (
     <Stack {...props}>
