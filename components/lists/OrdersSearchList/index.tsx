@@ -16,12 +16,12 @@ const OrdersSearchList = () => {
   const pageSize = 20;
   const [page, order, sort, office, period] = useSearchParamValues(['page', 'order', 'sort', 'office', 'period']);
 
-  // 1. Мемоизируем парсинг периода, чтобы массив не пересоздавался в памяти при каждом рендере
+  // Мемоизируем парсинг периода
   const periodParam = useMemo(() => {
     return stringToPeriod(period ?? '');
   }, [period]);
 
-  // 2. Стабилизируем и строго типизируем объект параметров для RTK Query
+  // Стабилизируем и строго типизируем объект параметров для RTK Query
   const queryParams = useMemo(() => {
     const startIso = periodParam && periodParam[0] ? dayjs(periodParam[0]).toISOString() : undefined;
     const endIso = periodParam && periodParam[1] ? dayjs(periodParam[1]).toISOString() : undefined;
@@ -37,11 +37,10 @@ const OrdersSearchList = () => {
     };
   }, [page, order, sort, office, periodParam]);
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Проверяем, пуст ли параметр офиса (филиала)
+  // Проверяем, пуст ли параметр офиса (филиала)
   const isOfficeNotSelected = !office || office === '' || office === 'undefined';
 
-  // Передаем мемоизированный queryParams и управляем выполнением с помощью флага skip.
-  // Запрос не будет "вхолостую" спамить бэкенд, пока модератор не выбрал филиал.
+  // Отправляем запрос списка заказов модератора
   const { data, isFetching, error, refetch } = useSearchOrdersQuery(
     queryParams,
     { skip: isOfficeNotSelected }
@@ -56,7 +55,7 @@ const OrdersSearchList = () => {
     );
   }
 
-  // ✅ ИСПРАВЛЕНИЕ №2: Если филиал ещё не выбран в фильтре — показываем аккуратное приглашение к действию
+  // Если филиал ещё не выбран в фильтре — показываем аккуратное приглашение к действию
   if (isOfficeNotSelected) {
     return (
       <div className={commonClasses.loadingBox} style={{ paddingTop: '60px' }}>
@@ -67,41 +66,48 @@ const OrdersSearchList = () => {
     );
   }
 
-  // Если идет загрузка (включая самую первую долю секунды инициализации), строго возвращаем только лоадер
-  if (isFetching || !data) {
-    return (
-      <div className={commonClasses.loadingBox}>
-        <LoadingOverlay visible />
-      </div>
-    );
-  }
+  // ✅ ИСПРАВЛЕНИЕ №1: Безопасное извлечение массива данных и тоталов с защитой от undefined.
+  // Это полностью страхует страницу от падения TypeError во время асинхронных ререндеров Next.js 15.
+  const ordersItems = data?.data ?? [];
+  const totalPagesCount = data?.totalPages ?? 1;
 
-  // Проверка отсутствия данных срабатывает только когда data гарантированно загружен
-  const hasNoData = data.data.length === 0;
+  // ✅ ИСПРАВЛЕНИЕ №2: Рассчитываем флаг мягкого оверлейного лоадера.
+  // Спиннер будет гореть только тогда, когда идет первичный запрос, а в памяти Redux еще нет данных.
+  const isDataLoading = isFetching && !data;
+  const hasNoData = !isFetching && data && ordersItems.length === 0;
 
-  if (hasNoData) {
-    return (
-      <div className={commonClasses.loadingBox}>
-        <Image 
-          src={searchEmpty} 
-          width={250} 
-          height={250} 
-          alt="Nothing found"
-          priority // Ускоряет отрисовку заглушки в Next.js 15
-        />
-        <Title order={3}>По вашему запросу ничего не найдено</Title>
-      </div>
-    );
-  }
-
-  // Сюда код дойдет только тогда, когда загрузка завершена и в массиве реально есть заказы
   return (
-    <>
-      <OrdersTable items={data.data}/>
-      <div className={commonClasses.pagination}>
-        <Pagination total={data.totalPages}/>
-      </div>
-    </>
+    // ✅ ИСПРАВЛЕНИЕ №3: Оборачиваем весь рендер в контейнер с относительным позиционированием.
+    // Мы полностью убрали блокирующий "if (isFetching || !data) return ...".
+    // Теперь разметка стабильна, а LoadingOverlay перекрывает контейнер, не разрушая связи Virtual DOM!
+    <div style={{ position: 'relative', minHeight: '300px', width: '100%' }}>
+      <LoadingOverlay visible={isFetching || !data} overlayProps={{ blur: 1 }} />
+      
+      {
+        hasNoData ? (
+          <div className={commonClasses.loadingBox}>
+            <Image 
+              src={searchEmpty} 
+              width={250} 
+              height={250} 
+              alt="Nothing found"
+              priority 
+            />
+            <Title order={3}>По вашему запросу ничего не найдено</Title>
+          </div>
+        ) : (
+          // Отрисовываем контент, передавая безопасный массив ordersItems
+          <>
+            <OrdersTable items={ordersItems} />
+            {ordersItems.length > 0 && (
+              <div className={commonClasses.pagination}>
+                <Pagination total={totalPagesCount} />
+              </div>
+            )}
+          </>
+        )
+      }
+    </div>
   );
 };
 

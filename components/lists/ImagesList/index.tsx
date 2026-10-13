@@ -2,7 +2,7 @@
 
 import { useDeleteImagesMutation, useDeleteImagesTagsMutation, useGetImageListQuery } from "@/lib/api/moderatorApi";
 import ImageCard from "../../cards/ImageCard";
-import { Flex, LoadingOverlay, Skeleton, Title } from "@mantine/core"; // Добавили Title
+import { Flex, LoadingOverlay, Skeleton, Title } from "@mantine/core";
 import classes from './styles.module.scss';
 import { Pagination } from "@/UI";
 import { useSearchParamValues } from "@/shared/hooks";
@@ -29,16 +29,16 @@ const ImageList = (props: ImageListProps) => {
     canteenId: office ? +office : undefined,
   }), [page, s, orderBy, sortOrder, office]);
 
-  // ✅ ИСПРАВЛЕНИЕ №1: Проверяем, пуст ли параметр выбранной столовой в URL
+  // Проверяем, пуст ли параметр выбранной столовой в URL
   const isCanteenNotSelected = !office || office === '' || office === 'undefined';
 
-  // Передаем мемоизированный queryParams и блокируем холостой спам запросами к API,
-  // пока модератор не выбрал конкретную столовую в фильтре
+  // Передаем мемоизированный queryParams и управляем с помощью skip
   const { data, isLoading, isFetching, error } = useGetImageListQuery(queryParams, {
     skip: isCanteenNotSelected
   });
   
-  const images = data?.data;
+  const images = data?.data ?? []; // ✅ Исправление: гарантируем безопасный массив по умолчанию
+  const totalPagesCount = data?.totalPages ?? 1;
   const [picked, setPicked] = useState<number[]>([]);
   
   const togglePicked = (id: number) => {
@@ -63,7 +63,7 @@ const ImageList = (props: ImageListProps) => {
   
   const openEdit = () => {
     if(picked.length === 0) NotificationService.showForbiddenNotification({message:'Не выбрано ни одного изображения'})
-    if(images) {
+    if(images.length > 0) {
       const selectedImg = images.find((image) => image.id === picked[0]);
       if(selectedImg) openEditModal(selectedImg);
     }
@@ -116,7 +116,7 @@ const ImageList = (props: ImageListProps) => {
     };
   }, [coordinates.x, coordinates.y]);
 
-  // ✅ ИСПРАВЛЕНИЕ №2: Если столовая ещё не выбрана в фильтре — показываем аккуратное приглашение к действию
+  // Если столовая ещё не выбрана в фильтре — показываем аккуратное приглашение к действию
   if (isCanteenNotSelected) {
     return (
       <div className={classes.loadingBox} style={{ paddingTop: '60px' }}>
@@ -138,67 +138,69 @@ const ImageList = (props: ImageListProps) => {
     );
   }
 
-  // Загрузка спиннера срабатывает только во время активного fetch-запроса
-  if (isFetching || !data) {
-    return (
-      <div className={classes.loadingBox}>
-        <LoadingOverlay visible />
-      </div>
-    )
-  }
-
-  // Если столовая выбрана, но картинок в ней нет
-  if (data.data.length === 0) {
-    return (
-      <div className={classes.loadingBox}>
-        <NoContentPage
-          label="Отсутствуют изображения по заданному запросу :("
-          img={searchEmpty}
-          size='sm'
-        />
-      </div>
-    )
-  }
+  // ✅ ИСПРАВЛЕНИЕ №1: Вычисляем реальное наличие картинок в кэше Redux
+  const hasLoadedData = data && images.length > 0;
+  const hasNoData = !isFetching && data && images.length === 0;
 
   return (
-    <>
-      <Flex 
-        className={classes.imageListBox}
-        onContextMenu={e => {e.preventDefault(); toggleOpened({opened:!opened, coordinates: {x: e.pageX, y:e.pageY}})}}
-      >
-        <Flex className={classes.imageList}>
-          <LoadingOverlay visible={deleteImagesResult.isLoading || deleteImagesTagsResult.isLoading} />
-          {isLoading && <Skeleton mih={1000} miw={1400}/>}
-          {
-            images && images.map((img)=>(
-              <ImageCard 
-                key={img.id} 
-                image={img} 
-                togglePicked={()=>togglePicked(img.id)} picked={picked.includes(img.id)}
-                onDoubleClick={() => openEditModal(img)}
-              />
-            )) 
-          }
-        </Flex>
-        { data &&
-          <Flex className={classes.paginationBox}>
-            <Pagination total={data?.totalPages} />
+    // ✅ ИСПРАВЛЕНИЕ №2: Оборачиваем весь рендер в контейнер с относительным позиционированием.
+    // Мы полностью вырезали старый блокирующий "if (isFetching || !data)".
+    // Теперь разметка стабильна, а LoadingOverlay мягко перекрывает контейнер, не ломая Virtual DOM!
+    <div style={{ position: 'relative', minHeight: '400px', width: '100%' }}>
+      {/* Главный спиннер перекрывает галерею только во время активного сетевого запроса */}
+      <LoadingOverlay visible={isFetching || !data} overlayProps={{ blur: 1 }} />
+      
+      {
+        hasNoData ? (
+          <div className={classes.loadingBox}>
+            <NoContentPage
+              label="Отсутствуют изображения по заданному запросу :("
+              img={searchEmpty}
+              size='sm'
+            />
+          </div>
+        ) : (
+          <Flex 
+            className={classes.imageListBox}
+            onContextMenu={e => {e.preventDefault(); toggleOpened({opened:!opened, coordinates: {x: e.pageX, y:e.pageY}})}}
+          >
+            <Flex className={classes.imageList}>
+              <LoadingOverlay visible={deleteImagesResult.isLoading || deleteImagesTagsResult.isLoading} />
+              {/* Скелетон Mantine показывается только при первичной инициализации, когда данных нет вообще */}
+              {isLoading && !hasLoadedData && <Skeleton mih={1000} miw={1400}/>}
+              {
+                images.map((img)=>(
+                  <ImageCard 
+                    key={img.id} 
+                    image={img} 
+                    togglePicked={()=>togglePicked(img.id)} picked={picked.includes(img.id)}
+                    onDoubleClick={() => openEditModal(img)}
+                  />
+                )) 
+              }
+            </Flex>
+            { hasLoadedData && (
+              <Flex className={classes.paginationBox}>
+                <Pagination total={totalPagesCount} />
+              </Flex>
+            )}
+            <DropdownMenu 
+              opened={opened} 
+              onChange={(opened) => toggleOpened({opened, coordinates})} 
+              offset={menuOffset} 
+              width={180}
+              actions={{
+                selectAll: ()=> setPicked(images.map(({id})=>id)),
+                deselectAll: () => setPicked([]),
+                edit: openEdit,
+                deleteItems,
+                deleteTags,
+              }}
+            />
           </Flex>
-        }
-        <DropdownMenu 
-          opened={opened} 
-          onChange={(opened) => toggleOpened({opened, coordinates})} 
-          offset={menuOffset} 
-          width={180}
-          actions={{
-            selectAll: ()=> setPicked(images?.map(({id})=>id) ?? []),
-            deselectAll: () => setPicked([]),
-            edit: openEdit,
-            deleteItems,
-            deleteTags,
-          }}
-        />
-      </Flex>
+        )
+      }
+
       { img &&
         <ImageEditCard
           opened={editModalOpened}
@@ -206,7 +208,7 @@ const ImageList = (props: ImageListProps) => {
           imageData={img}
         />
       }
-    </>
+    </div>
   );
 };
 

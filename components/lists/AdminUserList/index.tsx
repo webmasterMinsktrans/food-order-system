@@ -4,7 +4,7 @@ import UserCard from "@/components/cards/UserCard";
 import { useSearchUsersQuery } from "@/lib/api/adminApi";
 import { ErrorPage, Pagination } from "@/UI";
 import { LoadingOverlay } from "@mantine/core";
-import { FunctionComponent, useMemo } from "react"; // 👈 Добавили useMemo
+import { FunctionComponent, useMemo } from "react";
 import { useSearchParamValues } from "@/shared/hooks";
 import classes from './styles.module.scss';
 import searchEmpty from '@/public/search_state.gif';
@@ -15,10 +15,9 @@ interface AdminUserListProps {}
 const AdminUserList: FunctionComponent<AdminUserListProps> = () => {
   const pageSize = 3;
   
-  // ✅ ИСПРАВЛЕНИЕ №1: Деструктурируем параметры для удобного отслеживания в useMemo
   const [page, s, sortOrder, orderBy, office] = useSearchParamValues(['page', 's', 'order', 'sort', 'office']);
 
-  // ✅ ИСПРАВЛЕНИЕ №2: Стабилизируем ссылку на объект параметров через useMemo
+  // Стабилизируем ссылку на объект параметров через useMemo
   const queryParams = useMemo(() => ({
     page: page ? +page : 1,
     pageSize,
@@ -28,7 +27,7 @@ const AdminUserList: FunctionComponent<AdminUserListProps> = () => {
     destinationOfficeId: office ? +office : undefined,
   }), [page, s, sortOrder, orderBy, office]);
 
-  // Передаем мемоизированный queryParams вместо создания объекта "на лету"
+  // Отправляем запрос списка ID пользователей админки
   const { data, isFetching, error, refetch } = useSearchUsersQuery(queryParams);
 
   if (error) {
@@ -40,40 +39,47 @@ const AdminUserList: FunctionComponent<AdminUserListProps> = () => {
     );
   }
 
-  // ✅ ИСПРАВЛЕНИЕ №3: Безопасная проверка пустого состояния. 
-  // NoContentPage должен показываться только если загрузка завершена, а массив id пуст.
-  const hasNoData = !isFetching && data && data.data.length === 0;
+  // ✅ ИСПРАВЛЕНИЕ №1: Безопасное извлечение массива данных с защитой от undefined
+  const usersIds = data?.data ?? [];
+  const totalPagesCount = data?.totalPages ?? 1;
 
-  if (isFetching || hasNoData) {
-    return (
-      <div className={classes.loadingBox}>
-        {
-          isFetching ?
-          <LoadingOverlay visible />
-          :
-          <NoContentPage
-            label="По вашему запросу ничего не найдено :("
-            img={searchEmpty}
-            size='sm'
-          />
-        }
-      </div>
-    );
-  }
+  // ✅ ИСПРАВЛЕНИЕ №2: Вычисляем реальное наличие данных в памяти браузера
+  const hasLoadedData = data && usersIds.length > 0;
+  const hasNoData = !isFetching && data && usersIds.length === 0;
 
   return (
-    <>
-      {/* ✅ Теперь этот список рендерится стабильно, не вызывая каскадный спам запросами в UserCard */}
-      {data?.data.map((id) => (
-        <UserCard key={id} userId={id} />
-      ))}
+    // ✅ ИСПРАВЛЕНИЕ №3: Оборачиваем весь рендер в контейнер с относительным позиционированием.
+    // Мы полностью вырезали старый блокирующий "if (isFetching || hasNoData) return ...".
+    // Теперь разметка стабильна, а LoadingOverlay мягко перекрывает контейнер, не разрушая связи Virtual DOM!
+    <div style={{ position: 'relative', minHeight: '300px', width: '100%' }}>
+      {/* Главный спиннер перекрывает список только во время активного сетевого запроса */}
+      <LoadingOverlay visible={isFetching || !data} overlayProps={{ blur: 1 }} />
       
-      {data && (
-        <div className={classes.pagination}>
-          <Pagination total={data.totalPages} />
-        </div>
-      )}
-    </>
+      {
+        hasNoData ? (
+          <div className={classes.loadingBox}>
+            <NoContentPage
+              label="По вашему запросу ничего не найдено :("
+              img={searchEmpty}
+              size='sm'
+            />
+          </div>
+        ) : (
+          // Отрисовываем контент, передавая безопасный массив usersIds в цикл .map()
+          <>
+            {usersIds.map((id) => (
+              <UserCard key={id} userId={id} />
+            ))}
+            
+            {hasLoadedData && (
+              <div className={classes.pagination}>
+                <Pagination total={totalPagesCount} />
+              </div>
+            )}
+          </>
+        )
+      }
+    </div>
   );
 };
  

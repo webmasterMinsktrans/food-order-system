@@ -7,16 +7,16 @@ import { ErrorPage, Pagination } from '@/UI';
 import Image from "next/image";
 import searchEmpty from '@/public/search_state.gif';
 import { useSearchParamValues } from '@/shared/hooks';
-import { useMemo } from 'react'; // 👈 Добавили useMemo
-import commonClasses from '../styles.module.scss';
+import { useMemo } from 'react';
+import commonClasses from '../styles.scss' // Убедитесь в правильности импорта стилей
 
 interface BranchOfficeListProps {}
 
 const BranchOfficeList = (props: BranchOfficeListProps) => {
-  // ✅ ИСПРАВЛЕНИЕ №1: Деструктурируем параметры из URL
+  // Деструктурируем параметры из URL
   const [page, sortOrder, orderBy] = useSearchParamValues(['page', 'order', 'sort']);
 
-  // ✅ ИСПРАВЛЕНИЕ №2: Стабилизируем ссылку на объект параметров через useMemo
+  // Стабилизируем ссылку на объект параметров через useMemo
   const queryParams = useMemo(() => ({
     page: page ? +page : 1,
     pageSize: 30,
@@ -36,30 +36,42 @@ const BranchOfficeList = (props: BranchOfficeListProps) => {
     );
   }
 
-  // ✅ ИСПРАВЛЕНИЕ №3: Контролируем показ пустого состояния, чтобы избежать фликкеров при фоновом fetch
-  const hasNoData = !isFetching && data && data.data.length === 0;
+  // ✅ ИСПРАВЛЕНИЕ №1: Безопасное извлечение массива данных с защитой от undefined
+  const officeItems = data?.data ?? [];
+  const totalPagesCount = data?.totalPages ?? 1;
 
-  if (isFetching || hasNoData) {
-    return (
-      <div className={commonClasses.loadingBox}>
-        {
-          isFetching ?
-          <LoadingOverlay visible />
-          :
-          <>
-            <Image src={searchEmpty} width={250} height={250} alt="Nothing found"/>
-            <Title order={3}>По вашему запросу ничего не найдено</Title>
-          </>
-        }
-      </div>
-    );
-  }
+  // ✅ ИСПРАВЛЕНИЕ №2: Вычисляем реальное наличие данных в памяти браузера
+  const hasLoadedData = data && officeItems.length > 0;
+  const hasNoData = !isFetching && data && officeItems.length === 0;
 
   return (
-    <>
-      <BranchesTable items={data?.data ?? []} />
-      {data && <div className={commonClasses.pagination}><Pagination total={data.totalPages}/></div>}
-    </>
+    // ✅ ИСПРАВЛЕНИЕ №3: Оборачиваем весь рендер в контейнер с относительным позиционированием.
+    // Мы полностью вырезали старый блокирующий "if (isFetching || hasNoData) return ...".
+    // Теперь разметка стабильна, а LoadingOverlay мягко перекрывает контейнер, не разрушая связи Virtual DOM!
+    <div style={{ position: 'relative', minHeight: '300px', width: '100%' }}>
+      {/* Главный спиннер перекрывает список только во время активного сетевого запроса */}
+      <LoadingOverlay visible={isFetching || !data} overlayProps={{ blur: 1 }} />
+      
+      {
+        hasNoData ? (
+          <div className={commonClasses.loadingBox}>
+            <Image src={searchEmpty} width={250} height={250} alt="Nothing found" priority />
+            <Title order={3} style={{ marginTop: '16px' }}>По вашему запросу ничего не найдено</Title>
+          </div>
+        ) : (
+          // Отрисовываем контент, передавая безопасный массив officeItems в таблицу
+          <>
+            <BranchesTable items={officeItems} />
+            
+            {hasLoadedData && (
+              <div className={commonClasses.pagination}>
+                <Pagination total={totalPagesCount}/>
+              </div>
+            )}
+          </>
+        )
+      }
+    </div>
   );
 };
 
