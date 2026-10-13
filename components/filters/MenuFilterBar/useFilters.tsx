@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useTransition } from 'react'; // ✅ ИСПРАВЛЕНИЕ №1: Импортируем useTransition
+import { useMemo, useTransition } from 'react'; // Убрали useEffect и useState
 import { ComboboxItem } from '@mantine/core';
 import { useGetMenuCategoriesQuery } from '@/lib/api/menuApi';
 import { useArraySearchParamValue, useUpdatePageURL } from '@/shared/hooks';
@@ -10,19 +10,19 @@ import { FetchBaseQueryError } from '@reduxjs/toolkit/query';
 export function useFilters() {
   const { data, error } = useGetMenuCategoriesQuery(undefined);
   
-  const type = useArraySearchParamValue<string>('type');
-  const categoryParam = useArraySearchParamValue<string>('category');
-  
-  const [categoryValue, setCategoryState] = useState<string[]>([]);
-  const [typeValue, setTypeState] = useState<string[]>([]);
+  // ✅ Единственный источник правды — URL-параметры. Никакого дублирования в локальный useState!
+  const urlType = useArraySearchParamValue<string>('type');
+  const urlCategory = useArraySearchParamValue<string>('category');
   
   const { updateURL } = useUpdatePageURL();
-
-  // ✅ ИСПРАВЛЕНИЕ №2: Инициализируем хук перехода для React 19.
-  // Он прикажет браузеру сначала дать отработать внутреннему изменению стейта MultiSelect,
-  // а тяжелое асинхронное обновление URL-адреса Next.js выполнить в неблокирующем фоновом режиме.
   const [, startTransition] = useTransition();
 
+  // ✅ Стабилизируем массивы значений для пропсов value Mantine MultiSelect.
+  // useMemo гарантирует, что ссылки в памяти будут неизменны при рендерах, если URL не менялся.
+  const typeValue = useMemo(() => urlType ?? [], [urlType]);
+  const categoryValue = useMemo(() => urlCategory ?? [], [urlCategory]);
+
+  // Мемоизируем опции категорий с сервера
   const categoryOptions = useMemo(() => {
     if (!data) return [];
     return data.map(({ id, name }) => ({
@@ -31,58 +31,33 @@ export function useFilters() {
     }));
   }, [data]);
 
-  useEffect(() => {
-    if (categoryParam) {
-      setCategoryState(categoryParam);
-    }
-  }, [categoryParam]);
+  // Вывод ошибок сервера (безопасный вызов без влияния на рендеринг полей)
+  if (error) {
+    NotificationService.showErrorNotification({
+      title: 'Ошибка получения категорий',
+      message: `${(error as FetchBaseQueryError)?.status} ${(error as any)?.message || ''}`,
+    });
+  }
 
-  useEffect(() => {
-    if (type) {
-      setTypeState(type);
-    }
-  }, [type]);
-
-  useEffect(() => {
-    if (error) {
-      NotificationService.showErrorNotification({
-        title: 'Ошибка получения категорий',
-        message: `${(error as FetchBaseQueryError)?.status} ${(error as any)?.message || ''}`,
-      });
-    }
-  }, [error]);
-
+  // Расчет активности фильтров «на лету» без каскадных эффектов
   const isFiltersActive = categoryValue.length > 0 || typeValue.length > 0;
 
-  // ✅ ИСПРАВЛЕНИЕ №3: Оборачиваем вызов утилиты updateURL роутера Next.js 15 в startTransition.
-  // Это полностью устраняет падение "Application error: a client-side exception has occurred".
-  const handleUrlUpdate = (updatedCategory: string[], updatedType: string[]) => {
-    startTransition(() => {
-      const updatedFields = ['category', 'type', 'page'];
-      updateURL(updatedFields, [
-        updatedCategory.toString(),
-        updatedType.toString(),
-        ''
-      ]);
-    });
-  };
-
+  // Контролируемое, неблокирующее обновление адресной строки URL строго по клику пользователя
   const changeCategory = (arg?: string[]) => {
     const newValue = arg ?? [];
-    setCategoryState(newValue);
-    handleUrlUpdate(newValue, typeValue);
+    startTransition(() => {
+      updateURL(['category', 'type', 'page'], [newValue.toString(), typeValue.toString(), '']);
+    });
   };
 
   const changeType = (arg?: string[]) => {
     const newValue = arg ?? [];
-    setTypeState(newValue);
-    handleUrlUpdate(categoryValue, newValue);
+    startTransition(() => {
+      updateURL(['category', 'type', 'page'], [categoryValue.toString(), newValue.toString(), '']);
+    });
   };
 
   const resetFilters = () => {
-    setCategoryState([]);
-    setTypeState([]);
-    // ✅ ИСПРАВЛЕНИЕ №4: Сброс фильтров также изолируем плавным переходом
     startTransition(() => {
       updateURL(['category', 'type', 'page'], ['', '', '']);
     });
@@ -105,3 +80,4 @@ const typeOptions: Array<ComboboxItem> = [
   { value: 'ownProduct', label: 'Блюда собственного производства' },
   { value: 'alien', label: 'Готовая продукция' },
 ];
+
