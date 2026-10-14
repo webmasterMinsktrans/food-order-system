@@ -10,7 +10,7 @@ export function orderStatusColor(statusText: string = ' '): string {
 export const allowedInterfaces = {
   client: ['client'],
   'menu-moderator': ['client', 'menu-moderator'],
-  admin: ['client', 'menu-moderator', 'admin'],
+  admin: ['client', 'menu-moderator', 'control-panel'],
 };
 export const rolesSelectOptions = [
   {label: 'Клиент', value: 'client'},
