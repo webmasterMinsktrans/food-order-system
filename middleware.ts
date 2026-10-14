@@ -4,10 +4,10 @@ import { cookies } from 'next/headers';
 import { CryptoService } from './shared/services/CryptoService';
 import { allowedInterfaces } from './shared/settings';
 
-export const authRoutes = ['/login', '/change-password', '/reset-password', '/password-confirmation', '/email-confirmation', '/sign-up'];
+export const authRoutes = ['/sign-in', '/change-password', '/reset-password', '/password-confirmation', '/email-confirmation', '/sign-up'];
 export const publicRoutes = ['/'];
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|.*\\.png$).*)'],
+  matcher: ['/((?!v1|_next/static|_next/image|.*\\.png$).*)'],
 };
 export const commonUserRoutes = ['/profile'];
 
@@ -20,7 +20,7 @@ export async function middleware(request: NextRequest) {
     const { role } = payload;
     if (!role) {
       request.cookies.delete(['role', 'token', 'refresh-token']);
-      return Response.redirect(new URL('/login', request.url));
+      return Response.redirect(new URL('/sign-in', request.url));
     }
     const roleName = (role as string).replaceAll('_', '-') as keyof typeof allowedInterfaces;
     if (
@@ -34,6 +34,6 @@ export async function middleware(request: NextRequest) {
     !publicRoutes.includes(pathName) &&
     !authRoutes.find(route => pathName.startsWith(route))
   ) {
-    return Response.redirect(new URL('/login', request.url));
+    return Response.redirect(new URL('/sign-in', request.url));
   }
 }
