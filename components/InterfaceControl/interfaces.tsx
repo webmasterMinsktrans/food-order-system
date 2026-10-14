@@ -11,7 +11,7 @@ const interfaces: SegmentedControlItem[] = [
   },
   {
     label:'Админ',
-    value:'admin',
+    value:'control-panel',
   },
 ];
 
