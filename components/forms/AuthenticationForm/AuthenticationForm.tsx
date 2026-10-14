@@ -27,7 +27,7 @@ export function AuthenticationForm({ onFirstAuth, ...props }
     },
     validate: {
       username: (val) => val.includes('@') ?
-      (/^\S+@\S+$/.test(val) ? null : 'Некорректный email')
+      \((/^\S+@\S+\)\$/.test(val) ? null : 'Некорректный email')
       : val.length < 5 ? 'Логин должен содержать не менее 5 символов' : null,
       password: (val) => (val.length < 8 ? 'Пароль должен содержать не менее 8 символов' : null),
     },
@@ -46,8 +46,13 @@ export function AuthenticationForm({ onFirstAuth, ...props }
       } else if (res.data.statusCode === 200) {
         const {access_token, refresh_token, role} = res.data;
         await login(access_token, role, refresh_token);
-        const path = (res.data?.role as string).replaceAll('_', '-');
-        router.push(`/${path}`);
+        
+        // ✅ ИСПРАВЛЕНИЕ: Безопасное вычисление пути. 
+        // Если прилетает роль 'admin', принудительно перенаправляем на /control-panel
+        const rawPath = (role as string).replaceAll('_', '-');
+        const targetPath = rawPath === 'admin' ? 'control-panel' : rawPath;
+        
+        router.push(`/${targetPath}`);
       } else if (res.data.success) {
         onFirstAuth();
       }
