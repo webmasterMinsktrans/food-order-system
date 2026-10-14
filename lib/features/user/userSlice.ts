@@ -22,8 +22,11 @@ export const userSlice = createSlice({
   reducers: {
     login: (state, action: PayloadAction<string>)=>{
       state.isLoggedIn = true;
-      state.role = action.payload.replaceAll('_','-');
-      state.interface = action.payload.replaceAll('_','-');
+      const formattedRole = action.payload.replaceAll('_', '-');
+      state.role = formattedRole;
+      
+      // МАСКИРОВКА: Если роль admin, принудительно подменяем путь на control-panel
+      state.interface = formattedRole === 'admin' ? 'control-panel' : formattedRole;
     },
     startLogout: (state) => {
       state.isLoggingOut = true;
@@ -39,14 +42,20 @@ export const userSlice = createSlice({
       localStorage.removeItem('persist:user');
       sessionStorage.removeItem('persist:cart');
     },
-    initializeUserData: (state,action: PayloadAction<{ isLoggedIn: boolean, role: string | null}> ) =>{
+    initializeUserData: (state, action: PayloadAction<{ isLoggedIn: boolean, role: string | null }>) => {
       state.isLoggedIn = action.payload.isLoggedIn;
-      state.role = action.payload.role?.replaceAll('_','-');
-      if(!state.interface)
-        state.interface = state.role ?? null;
+      const formattedRole = action.payload.role?.replaceAll('_', '-') ?? null;
+      state.role = formattedRole;
+      
+      if (!state.interface) {
+        // МАСКИРОВКА: Подменяем интерфейс при инициализации сессии пользователя
+        state.interface = formattedRole === 'admin' ? 'control-panel' : formattedRole;
+      }
     },
-    changeUserInterface:(state, action: PayloadAction<string>)=>{
-      state.interface = action.payload;
+    changeUserInterface: (state, action: PayloadAction<string>)=>{
+      const formattedInterface = action.payload.replaceAll('_', '-');
+      // МАСКИРОВКА: Если происходит ручное переключение интерфейса на admin
+      state.interface = formattedInterface === 'admin' ? 'control-panel' : formattedInterface;
     }
   },
   selectors: {
@@ -56,9 +65,9 @@ export const userSlice = createSlice({
     selectUserInterface: (state) => state.interface,
   },
 });
+
 export const { selectIsLoggingOut, selectIsLoggedIn, selectUserRole, selectUserInterface } = userSlice.selectors;
 export const { startLogout, endLogout, login, initializeUserData, changeUserInterface } = userSlice.actions;
-
 
 const userPersistConfig = {
   key: "user",
